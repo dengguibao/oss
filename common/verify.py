@@ -100,6 +100,10 @@ def verify_username(username: str) -> bool:
     return True if re.match("^[A-Z0-9a-z_\\-.]{6,10}$", username) else False
 
 
+def verify_bucket_name(name: str) -> bool:
+    return True if re.match('^[a-z][a-z0-9_]{1,61}[a-z]$') else False
+
+
 def verify_true_false(i) -> bool:
     """
     verify object(i) is true or false
