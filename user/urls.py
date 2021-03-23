@@ -5,6 +5,9 @@ from .views import (
     user_login_endpoint,
     user_delete_endpoint,
     list_user_info_endpoint,
+    get_user_detail_endpoint,
+    verify_user_phone_endpoint,
+    user_charge_endpoint
 )
 
 urlpatterns = [
@@ -13,4 +16,8 @@ urlpatterns = [
     path('user/delete', user_delete_endpoint),
     path('user/login', user_login_endpoint),
     path('user/list_user', list_user_info_endpoint),
+
+    path('user/detail/<int:user_id>', get_user_detail_endpoint),
+    path('user/phone_verify', verify_user_phone_endpoint),
+    path('user/charge', user_charge_endpoint)
 ]

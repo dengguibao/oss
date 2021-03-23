@@ -1,4 +1,7 @@
+from rest_framework.status import HTTP_400_BAD_REQUEST
+from rest_framework.response import Response
 import re
+import json
 
 
 def verify_phone(phone: str) -> bool:
@@ -30,7 +33,7 @@ def verify_is_equal(x, y):
     return True if x == y else False
 
 
-def verify_field(data: dict, field: tuple):
+def verify_field(io: bytes, field: tuple):
     """
     verify received dict data
     field format is ('field_name', field_type, verify_func)
@@ -38,8 +41,7 @@ def verify_field(data: dict, field: tuple):
     when verify_func is tuple then tuple first element is verify_func, the second element is arg
     when field_name start with '*' mean the filed is necessary
     """
-    if not isinstance(data, dict):
-        return
+    data = json.loads(io.decode())
 
     buff = {}
 
@@ -101,7 +103,15 @@ def verify_username(username: str) -> bool:
 
 
 def verify_bucket_name(name: str) -> bool:
-    return True if re.match('^[a-z][a-z0-9_]{1,61}[a-z]$') else False
+    return True if re.match('^[a-z][a-z0-9_]{1,61}[a-z]$', name) else False
+
+
+def verify_length(data: str, length: int) -> bool:
+    return True if len(data) == length else False
+
+
+def verify_in_array(data: str, array: tuple) -> bool:
+    return True if data in array else False
 
 
 def verify_true_false(i) -> bool:
@@ -109,3 +119,16 @@ def verify_true_false(i) -> bool:
     verify object(i) is true or false
     """
     return True if i in ('1', 1, 'true', 'false', 0, '0') else False
+
+
+def verify_body(func):
+    def wrap(request, *args, **kwargs):
+        try:
+            j = json.loads(request.body.decode())
+        except:
+            return Response({
+                'code': 1,
+                'msg': 'illegal request, request content is not application/json'
+            }, status=HTTP_400_BAD_REQUEST)
+        return func(request, *args, **kwargs)
+    return wrap
