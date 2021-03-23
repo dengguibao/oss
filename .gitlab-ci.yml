@@ -1,0 +1,34 @@
+stages:
+  - install-dep
+  - test
+  - deploy
+  - security-scan
+
+build:
+  stage: install-dep
+  tags:
+    - dev-ubuntu
+  script:
+    - pip3 install -r ./requirement.txt
+    - python3 ./manage.py makemigrations
+    - python3 ./manage.py migrate
+
+test:
+  stage: test
+  script:
+    - ls -l
+    - pwd
+    - python3 ./manage.py test
+    - rm db.sqlite3
+  tags:
+    - dev-ubuntu
+
+deploy:
+  stage: deploy
+  tags:
+    - dev-ubuntu
+  script:
+     - cp -rf * /home/oss/
+     - python3 ./manage.py makemigrations
+     - python3 ./manage.py migrate
+     - systemctl restart oss-web.service
