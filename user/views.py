@@ -2,16 +2,17 @@ from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CR
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AnonymousUser
 from .models import Profile, Money
 from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
-import time
 from rest_framework.permissions import AllowAny, IsAdminUser
 from common.verify import verify_field, verify_mail, verify_username, verify_phone, verify_body, verify_length
 from django.core.paginator import Paginator
 from django.conf import settings
+from rgwadmin import RGWAdmin
+import time
 
 
 @api_view(['POST'])
@@ -33,10 +34,18 @@ def create_user_endpoint(request):
     else:
         is_subuser = True if is_subuser == 1 else False
 
-    if (is_subuser and not request.user) or request.user.profile.is_subuser:
+    req_user = request.user
+
+    if is_subuser and isinstance(req_user, AnonymousUser):
         return Response({
             'code': 1,
-            'msg': 'illegal request, only normal user can be create sub user'
+            'msg': 'illegal request, create sub user need a already user'
+        })
+
+    if not isinstance(req_user, AnonymousUser) and req_user.profile.is_subuser:
+        return Response({
+            'code': 1,
+            'msg': 'illegal request, only normal can be create sub user'
         })
 
     fields = (
@@ -449,3 +458,33 @@ def user_charge_endpoint(request):
         'msg': 'success',
         'amount': current
     })
+
+
+def init_rgw_api():
+    access_key, secret_key, server = settings.RGW_API_KEY['NORMAL']
+    return RGWAdmin(
+        access_key=access_key,
+        secret_key=secret_key,
+        server=server,
+        secure=False,
+        verify=False
+    )
+
+
+def radows_create_user(user_type: str='nomal', **kwargs):
+    if user_type not in ('normal', 'subuser'):
+        return
+
+    caps = 'usage=read; users=read, write; buckets=read,write'
+    if user_type == 'subuser':
+        caps = 'usage=read; users=read; buckets=read,write'
+
+    kwargs['caps'] = caps
+
+    rgw =init_rgw_api()
+    try:
+        user_info = rgw.create_user(**kwargs)
+    except:
+        return
+
+    return user_info['keys'][0]['secret_key']
