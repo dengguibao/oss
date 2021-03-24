@@ -17,9 +17,9 @@ class ExpireTokenAuthentication(TokenAuthentication):
         if not token.user.is_active:
             raise exceptions.AuthenticationFailed(_('User inactive or deleted.'))
 
-        if (time.time() - token.created.timestamp()) > settings.TOKEN_EXPIRE_TIME:
-            raise exceptions.AuthenticationFailed(_('Token is expired.'))
+        # if (time.time() - token.created.timestamp()) > settings.TOKEN_EXPIRE_TIME:
+        #     raise exceptions.AuthenticationFailed(_('Token is expired.'))
 
-        return (token.user, token)
+        return token.user, token
 
 

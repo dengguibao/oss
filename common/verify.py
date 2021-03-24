@@ -55,7 +55,7 @@ def verify_field(io: bytes, field: tuple):
                 field_name = field_name[1:]
 
                 if field_name not in data or not data[field_name]:
-                    return 'field %s is necessary and can not be empty' % field_name
+                    return 'field "%s" is necessary, can not be empty' % field_name
 
             if field_name not in data:
                 continue

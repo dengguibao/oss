@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
 from rest_framework.permissions import AllowAny, IsAdminUser
-from common.verify import verify_field, verify_mail, verify_username, verify_phone, verify_body, verify_length
+from common.verify import verify_field, verify_mail, verify_username, verify_phone, verify_body, verify_length, verify_max_length
 from common.func import init_rgw_api
 from django.core.paginator import Paginator
 from django.conf import settings
@@ -50,10 +50,10 @@ def create_user_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*pwd', str, None),
+        ('*pwd', str, (verify_max_length, 30)),
         # ('*pwd2', str, None),
         ('*email', str, verify_mail),
-        ('*first_name', str, None),
+        ('*first_name', str, (verify_max_length, 8)),
         ('*phone', str, verify_phone),
     )
 

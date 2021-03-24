@@ -21,7 +21,7 @@ def set_bucket_type_endpoint(request):
         ('*name', str, (verify_max_length, 10)),
         ('*price', float, None)
     ]
-    id_field = ('*bucket_type_id', int, None)
+    id_field = (('*bucket_type_id', int, None),)
 
     if request.method == 'GET':
         # id = request.GET.get('id', None)
@@ -43,7 +43,7 @@ def set_bucket_type_endpoint(request):
         }, status=HTTP_200_OK)
 
     if request.method == 'PUT':
-        fields.append(id_field)
+        fields.append(id_field[0])
 
     if request.method == 'DELETE':
         fields = id_field
@@ -66,14 +66,14 @@ def set_bucket_type_endpoint(request):
     try:
         if request.method == 'POST':
             model.objects.create(**data)
-            status_code = HTTP_200_OK
+            status_code = HTTP_201_CREATED
 
         if request.method == 'PUT':
             bt = model.objects.get(bucket_type_id=data['bucket_type_id'])
             bt.name = data['name']
             bt.price = data['price']
             bt.save()
-            status_code = HTTP_201_CREATED
+            status_code = HTTP_200_OK
 
         if request.method == 'DELETE':
             model.objects.get(bucket_type_id=data['bucket_type_id']).delete()
@@ -82,8 +82,8 @@ def set_bucket_type_endpoint(request):
     except Exception as e:
         return Response({
             'code': 1,
-            'msg': e.args[0]
-        })
+            'msg': 'error, %s' % e.args
+        }, status=HTTP_400_BAD_REQUEST)
     else:
         return Response({
             'code': 0,
@@ -106,7 +106,7 @@ def set_offset_endpoint(request):
         ('*max_use_times', int, None),
         ('*valid_days', int, None),
     ]
-    id_field = ('*off_id', int, None)
+    id_field = (('*off_id', int, None),)
 
     # get请求
     if request.method == 'GET':
@@ -119,14 +119,15 @@ def set_offset_endpoint(request):
                 return Response({
                     'code': 1,
                     'msg': 'invalid off code',
-                    'value': 1
                 }, status=HTTP_400_BAD_REQUEST)
             else:
                 return Response({
                     'code': 0,
                     'msg': 'success',
-                    'value': o.offset
-                }, status=HTTP_400_BAD_REQUEST)
+                    'data': {
+                        'value': o.get_offset_value()
+                    }
+                }, status=HTTP_200_OK)
 
         # 管理员则可以查看所有的折扣码情况
         if request.user.is_superuser:
@@ -135,7 +136,15 @@ def set_offset_endpoint(request):
                 'code': 0,
                 'msg': 'success',
                 'data': o
-            }, status=HTTP_400_BAD_REQUEST)
+            }, status=HTTP_200_OK)
+
+    # put请求，用来更新对象
+    if request.method == 'PUT':
+        fields.append(id_field[0])
+
+    # delete请求，用来删除对象，只需要提供id即可
+    if request.method == 'DELETE':
+        fields = id_field
 
     # post, put, delete方法需要管理员、且验证字段通过才能进行
     if request.method in ('POST', 'PUT', 'DELETE'):
@@ -152,36 +161,31 @@ def set_offset_endpoint(request):
                 'msg': 'permission deinied!'
             }, status=HTTP_403_FORBIDDEN)
 
-    # put请求，用来更新对象
-    if request.method == 'PUT':
-        fields.append(id_field)
-
-    # delete请求，用来删除对象，只需要提供id即可
-    if request.method == 'DELETE':
-        fields = id_field
-
     try:
-        if request.method == 'PUT':
-            model.objects.create(**data)
-            status_code = HTTP_200_OK
-
-        # post请求，用来创建对象
         if request.method == 'POST':
-            bt = model.objects.get(bucket_type_id=data['bucket_type_id'])
-            bt.name = data['name']
-            bt.price = data['price']
-            bt.save()
+            model.objects.create(**data)
             status_code = HTTP_201_CREATED
 
+        # post请求，用来创建对象
+        if request.method == 'PUT':
+            off = model.objects.get(off_id=data['off_id'])
+            # print(off, data)
+            off.code = data['code']
+            off.offset = data['offset']
+            off.max_use_times = data['max_use_times']
+            off.valid_days = data['valid_days']
+            off.save()
+            status_code = HTTP_200_OK
+
         if request.method == 'DELETE':
-            model.objects.get(bucket_type_id=data['bucket_type_id']).delete()
+            model.objects.get(off_id=data['off_id']).delete()
             status_code = HTTP_200_OK
 
     except Exception as e:
         return Response({
             'code': 1,
-            'msg': e.args[0]
-        })
+            'msg': 'error, %s' % e.args
+        }, status=HTTP_400_BAD_REQUEST)
     else:
         return Response({
             'code': 0,

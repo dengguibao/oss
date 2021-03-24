@@ -26,6 +26,9 @@ class Buckets(models.Model):
     state = models.CharField(verbose_name='state', max_length=1, blank=False)
     create_time = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.name
+
     def calculate_cost(self, capacity):
         return self.bucket_type.price*capacity
 
@@ -47,18 +50,23 @@ class BucketAcl(models.Model):
 
 class Offset(models.Model):
     off_id = models.IntegerField(primary_key=True, auto_created=True)
-    code = models.CharField(verbose_name='offset code', max_length=6, blank=False)
+    code = models.CharField(verbose_name='offset code', unique=True, max_length=6, blank=False)
     offset = models.FloatField(verbose_name='offset value', blank=False)
     used_times = models.IntegerField(verbose_name='used times', blank=False, default=0)
     max_use_times = models.IntegerField(verbose_name='max use times', blank=False, default=0)
     valid_days = models.IntegerField(verbose_name='valid days', blank=False, default=0)
     create_time = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.code
+
     def get_offset_value(self):
         if self.used_times < self.max_use_times or \
                 self.create_time.timestamp()+(86400*self.valid_days) < time.time():
-            self.used_times += 1
-            self.save()
-            return self.offset, 'ok'
+            return self.offset
         else:
-            return 1, 'expire or used done'
+            return 1
+
+    def use_offset_code(self):
+        self.used_times += 1
+        self.save()
