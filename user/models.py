@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Profile(models.Model):
@@ -11,6 +13,16 @@ class Profile(models.Model):
     key_type = models.CharField(max_length=5, blank=True)
     parent_uid = models.CharField(max_length=50, verbose_name='parent account username', blank=True)
     is_subuser = models.BooleanField(verbose_name='is sub user', default=False, blank=False)
+
+
+# @receiver(post_save, sender=User)
+# def handle_create_user(sender, instance, created, **kwargs):
+#     print(**kwargs)
+#     if created:
+#         Profile.objects.create(user=instance, **kwargs)
+#     else:
+#         print(**kwargs)
+#         Profile.objects.filter(user=instance).update(**kwargs)
 
 
 class Money(models.Model):

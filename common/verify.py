@@ -121,14 +121,19 @@ def verify_true_false(i) -> bool:
     return True if i in ('1', 1, 'true', 'false', 0, '0') else False
 
 
+def verify_max_length(s: str, max_len: int) -> bool:
+    return True if len(s) < max_len else False
+
+
 def verify_body(func):
     def wrap(request, *args, **kwargs):
-        try:
-            j = json.loads(request.body.decode())
-        except:
-            return Response({
-                'code': 1,
-                'msg': 'illegal request, request content is not application/json'
-            }, status=HTTP_400_BAD_REQUEST)
+        if request.method in ('DELETE', 'POST', 'PUT'):
+            try:
+                j = json.loads(request.body.decode())
+            except:
+                return Response({
+                    'code': 1,
+                    'msg': 'illegal request, request content is not application/json'
+                }, status=HTTP_400_BAD_REQUEST)
         return func(request, *args, **kwargs)
     return wrap
