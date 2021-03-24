@@ -99,7 +99,7 @@ def verify_mail(mail: str) -> bool:
 
 
 def verify_username(username: str) -> bool:
-    return True if re.match("^[A-Z0-9a-z_\\-.]{6,10}$", username) else False
+    return True if re.match("^[A-Z0-9a-z_\\-.]{6,20}$", username) else False
 
 
 def verify_bucket_name(name: str) -> bool:

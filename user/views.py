@@ -126,7 +126,7 @@ def user_login_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*password', str, None)
+        ('*password', str, (verify_max_length, 30))
     )
 
     data = verify_field(request.body, fields)
@@ -177,16 +177,16 @@ def change_password_endpoint(request):
 
     fields = [
         ('*username', str, verify_username),
-        ('*pwd1', str, None),
-        ('*pwd2', str, None),
+        ('*pwd1', str, (verify_max_length, 30)),
+        ('*pwd2', str, (verify_max_length, 30)),
     ]
 
     if not request.user.is_superuser:
         fields = [
             ('*username', str, verify_username),
-            ('*old_pwd', str, None),
-            ('*pwd1', str, None),
-            ('*pwd2', str, None),
+            ('*old_pwd', str, (verify_max_length, 30)),
+            ('*pwd1', str, (verify_max_length, 30)),
+            ('*pwd2', str, (verify_max_length, 30)),
         ]
 
     data = verify_field(request.body, tuple(fields))
@@ -244,7 +244,7 @@ def user_delete_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*user_id', int, None)
+        ('*user_id', int, (verify_max_length, 10))
     )
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
@@ -478,7 +478,7 @@ def user_charge_endpoint(request):
 
     fields = (
         ('*order_id', str, (verify_length, 10)),
-        ('*money', float, None)
+        ('*money', float, (verify_max_length, 6))
     )
     data = verify_field(request.body, fields)
 

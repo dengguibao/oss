@@ -19,9 +19,9 @@ def set_bucket_type_endpoint(request):
     model = BucketType
     fields = [
         ('*name', str, (verify_max_length, 10)),
-        ('*price', float, None)
+        ('*price', float, (verify_max_length, 5))
     ]
-    id_field = (('*bucket_type_id', int, None),)
+    id_field = (('*bucket_type_id', int, (verify_max_length, 9)),)
 
     if request.method == 'GET':
         # id = request.GET.get('id', None)
@@ -102,11 +102,11 @@ def set_offset_endpoint(request):
     model = Offset
     fields = [
         ('*code', str, (verify_length, 8)),
-        ('*offset', float, None),
-        ('*max_use_times', int, None),
-        ('*valid_days', int, None),
+        ('*offset', float, (verify_max_length, 4)),
+        ('*max_use_times', int, (verify_max_length, 5)),
+        ('*valid_days', int, (verify_max_length, 3)),
     ]
-    id_field = (('*off_id', int, None),)
+    id_field = (('*off_id', int, (verify_max_length, 10)),)
 
     # get请求
     if request.method == 'GET':
