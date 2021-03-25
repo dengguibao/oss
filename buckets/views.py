@@ -3,7 +3,7 @@ from .models import BucketType, Buckets, Offset
 from django.contrib.auth.models import User
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_403_FORBIDDEN
+from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
 from common.verify import verify_max_length, verify_body, verify_field, verify_length
 from common.func import init_s3_connection
 
@@ -24,17 +24,6 @@ def set_bucket_type_endpoint(request):
     id_field = (('*bucket_type_id', int, (verify_max_length, 9)),)
 
     if request.method == 'GET':
-        # id = request.GET.get('id', None)
-        # if id:
-        #     try:
-        #         result = model.objects.get(pk=int(id))
-        #     except:
-        #         return Response({
-        #             'code': 1,
-        #             'msg': 'success',
-        #             'data': 'error id'
-        #         }, status=HTTP_400_BAD_REQUEST)
-        # else:
         result = model.objects.all().values()
         return Response({
             'code': 1,
@@ -119,7 +108,7 @@ def set_offset_endpoint(request):
                 return Response({
                     'code': 1,
                     'msg': 'invalid off code',
-                }, status=HTTP_400_BAD_REQUEST)
+                }, status=HTTP_404_NOT_FOUND)
             else:
                 return Response({
                     'code': 0,

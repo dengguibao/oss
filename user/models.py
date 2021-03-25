@@ -5,7 +5,7 @@ from django.dispatch import receiver
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     phone = models.CharField(max_length=11, blank=False)
     phone_verify = models.BooleanField(blank=False, default=False)
     secret_key = models.CharField(max_length=32, blank=True, verbose_name='ceph access key')

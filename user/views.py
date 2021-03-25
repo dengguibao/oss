@@ -1,17 +1,28 @@
-from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_403_FORBIDDEN
+from rest_framework.status import (
+    HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CREATED,
+    HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
+)
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.pagination import PageNumberPagination
+
 from django.contrib.auth.models import User, AnonymousUser
-from .models import Profile, Money
+from django.conf import settings
 from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
-from rest_framework.permissions import AllowAny, IsAdminUser
-from common.verify import verify_field, verify_mail, verify_username, verify_phone, verify_body, verify_length, verify_max_length
+
+from common.verify import (
+    verify_field, verify_mail, verify_username,
+    verify_phone, verify_body, verify_length,
+    verify_max_length
+)
 from common.func import init_rgw_api
-from django.core.paginator import Paginator
-from django.conf import settings
+from .serializer import UserSerialize
+from .models import Profile, Money
+
 import time
 
 
@@ -134,7 +145,7 @@ def user_login_endpoint(request):
         return Response({
             'code': 1,
             'msg': data
-        }, status=HTTP_400_BAD_REQUEST)
+        }, status=HTTP_404_NOT_FOUND)
 
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
@@ -302,49 +313,30 @@ def list_user_info_endpoint(request):
                 Q(profile__parent_uid=username)
             )
         else:
-            users = User.objects.all()
+            users = User.objects.select_related('profile').all()
     else:
         username = request.user.username
-        users = User.objects.filter(
+        users = User.objects.select_related('profile').filter(
             Q(username=username) |
             Q(profile__parent_uid=username)
         )
 
-    buff = []
-    for i in users:
-        buff.append({
-            'user_id': i.id,
-            'first_name': i.first_name,
-            'email': i.email,
-            'phone': i.profile.phone,
-            'is_active': i.is_active,
-            'is_superuser': i.is_superuser,
-            'date_joined': i.date_joined,
-            'last_login': i.last_login,
-            'username': i.username,
-            'phone_verify': i.profile.phone_verify,
-            'is_subuser': i.profile.is_subuser,
-            'parent_uid': i.profile.parent_uid,
-        })
-
-    try:
-        page_size = int(request.GET.get('page_size', settings.PAGE_SIZE))
-        page = int(request.GET.get('page', 1))
-    except:
-        page_size = settings.PAGE_SIZE
-        page = 1
-
-    p = Paginator(buff, page_size)
-    data = p.page(page)
-
+    page = PageNumberPagination()
+    page.page_query_param = 'page'
+    page.page_size_query_param = 'size'
+    page.page_size = 1
+    page.max_page_size = 20
+    ret = page.paginate_queryset(users, request)
+    ser = UserSerialize(ret, many=True)
+    # print(page.page_size, page.page.number)
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': list(data),
+        'data': ser.data,
         'page_info': {
             'record_count': len(users),
-            'page_size': page_size,
-            'current_page': page
+            'page_size': page.page_size,
+            'current_page': page.page.number
         }
     }, status=HTTP_200_OK)
 
@@ -373,7 +365,9 @@ def get_user_detail_endpoint(request, user_id):
         m = None
     req_username = request.user.username
 
-    if not request.user.is_superuser and u.username != req_username and u.profile.parent_uid != req_username:
+    if not request.user.is_superuser and \
+            u.username != req_username and \
+            u.profile.parent_uid != req_username:
         return Response({
             'code': 1,
             'msg': 'permission denied'
