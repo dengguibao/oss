@@ -1,22 +1,12 @@
 from rest_framework.status import HTTP_400_BAD_REQUEST
 from rest_framework.response import Response
+
 import re
 import json
 
 
 def verify_phone(phone: str) -> bool:
     return False if len(phone) != 11 or phone[0:2] not in ['13', '18', '15', '17'] else True
-
-
-# def verify_username(username: str) -> bool:
-#     """
-#     verify username whether contain special charset
-#     """
-#     special_char = ('/', ' ', '[', ']', '"', '\\', '\'', '$', '%', '^', '*', '(', ')', '!', '~', '`')
-#     for i in special_char:
-#         if i in username:
-#             return False
-#     return True
 
 
 def verify_in_array(arg1: str, array: tuple) -> bool:
@@ -33,15 +23,17 @@ def verify_is_equal(x, y):
     return True if x == y else False
 
 
-def verify_field(io: bytes, field: tuple):
+def verify_field(data: bytes, field: tuple):
     """
-    verify received dict data
-    field format is ('field_name', field_type, verify_func)
-    when verify_func is function then call the function verify field content
-    when verify_func is tuple then tuple first element is verify_func, the second element is arg
-    when field_name start with '*' mean the filed is necessary
+    使用用户自定义的函数验证用户传过来的数据
+    字段格式为（字段名，字段类型，验证方法）， 其中字段名，第一个字符为*的为段包含在字典中的key
+    通过则返回包含字段中的key的字典，否则返回未验证通过的信息
     """
-    data = json.loads(io.decode())
+    if isinstance(data, bytes):
+        data = json.loads(data.decode())
+
+    if isinstance(data, dict):
+        pass
 
     buff = {}
 
@@ -123,6 +115,18 @@ def verify_true_false(i) -> bool:
 
 def verify_max_length(s: str, max_len: int) -> bool:
     return True if len(s) < max_len else False
+
+
+def verify_max_value(i, max_value) -> bool:
+    return True if 0 < i < max_value else False
+
+
+def verify_pk(i: int, model: object) -> bool:
+    try:
+        model.objects.get(pk=int(i))
+    except:
+        return False
+    return True
 
 
 def verify_body(func):

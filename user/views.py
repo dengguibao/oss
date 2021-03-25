@@ -17,7 +17,7 @@ from django.contrib.auth import authenticate, login, logout
 from common.verify import (
     verify_field, verify_mail, verify_username,
     verify_phone, verify_body, verify_length,
-    verify_max_length
+    verify_max_length, verify_max_value
 )
 from common.func import init_rgw_api
 from .serializer import UserSerialize
@@ -255,7 +255,7 @@ def user_delete_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*user_id', int, (verify_max_length, 10))
+        ('*user_id', int, None)
     )
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
@@ -306,7 +306,8 @@ def list_user_info_endpoint(request):
     :return:
     """
     username = request.GET.get('username', None)
-    if request.user.is_superuser:
+    req_user = request.user
+    if req_user.is_superuser:
         if username:
             users = User.objects.filter(
                 Q(username=username) |
@@ -315,27 +316,36 @@ def list_user_info_endpoint(request):
         else:
             users = User.objects.select_related('profile').all()
     else:
-        username = request.user.username
+        username = req_user.username
         users = User.objects.select_related('profile').filter(
             Q(username=username) |
             Q(profile__parent_uid=username)
         )
 
+    try:
+        cur_page = int(request.GET.get('page', 1))
+        size = int(request.GET.get('size', settings.PAGE_SIZE))
+    except:
+        cur_page = 1
+        size = settings.PAGE_SIZE
+
     page = PageNumberPagination()
     page.page_query_param = 'page'
     page.page_size_query_param = 'size'
-    page.page_size = 1
+    page.page_size = settings.PAGE_SIZE
+    # page.page_size = size
+    page.number = cur_page
     page.max_page_size = 20
     ret = page.paginate_queryset(users, request)
     ser = UserSerialize(ret, many=True)
-    # print(page.page_size, page.page.number)
+    # print(page.page_size, page.page_size)
     return Response({
         'code': 0,
         'msg': 'success',
         'data': ser.data,
         'page_info': {
             'record_count': len(users),
-            'page_size': page.page_size,
+            'page_size': size,
             'current_page': page.page.number
         }
     }, status=HTTP_200_OK)
@@ -352,17 +362,15 @@ def get_user_detail_endpoint(request, user_id):
     """
     try:
         u = User.objects.get(pk=user_id)
-        # p = Profile.objects.get(user=u)
+        p = Profile.objects.get(user=u)
+        m = Money.objects.get(user=u)
+
     except:
         return Response({
             'code': 1,
             'msg': 'error user id'
         }, status=HTTP_400_BAD_REQUEST)
 
-    try:
-        m = Money.objects.get(user=u)
-    except:
-        m = None
     req_username = request.user.username
 
     if not request.user.is_superuser and \
@@ -373,9 +381,9 @@ def get_user_detail_endpoint(request, user_id):
             'msg': 'permission denied'
         }, status=HTTP_403_FORBIDDEN)
 
-    u_d = model_to_dict(u) if u else None
-    p_d = model_to_dict(u.profile) if u else None
-    m_d = model_to_dict(m) if m else None
+    u_d = model_to_dict(u)
+    p_d = model_to_dict(p)
+    m_d = model_to_dict(m)
 
     del u_d['password'], m_d['id'], p_d['id']
     return Response({
@@ -472,7 +480,7 @@ def user_charge_endpoint(request):
 
     fields = (
         ('*order_id', str, (verify_length, 10)),
-        ('*money', float, (verify_max_length, 6))
+        ('*money', float, (verify_max_value, 99999.0))
     )
     data = verify_field(request.body, fields)
 

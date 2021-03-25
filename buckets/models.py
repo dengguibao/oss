@@ -17,13 +17,13 @@ class Buckets(models.Model):
         ('s', 'suspend')
     )
     bucket_id = models.IntegerField(primary_key=True, auto_created=True)
-    name = models.CharField(verbose_name='bucket name', unique=True, max_length=63, blank=False),
-    capacity = models.IntegerField(verbose_name="capacity", blank=False),
-    duration = models.IntegerField(verbose_name="duration", blank=False),
-    user = models.ForeignKey(User, on_delete=models.CASCADE),
-    start_time = models.IntegerField(verbose_name='start time')
-    bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True)
-    state = models.CharField(verbose_name='state', max_length=1, blank=False)
+    name = models.CharField(verbose_name='bucket name', unique=True, max_length=63, blank=False, null=True)
+    capacity = models.IntegerField(verbose_name="capacity", default=0, blank=False)
+    duration = models.IntegerField(verbose_name="duration", default=0, blank=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user', null=True, blank=True)
+    start_time = models.IntegerField(verbose_name='start time', blank=False, default=0)
+    bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True, related_name='bucket_type')
+    state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False)
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -37,6 +37,9 @@ class Buckets(models.Model):
         self.duration = days
         self.start_time = new_start
         self.save()
+
+    def check_bucket_expire(self):
+       return True if self.start_time+self.duration*86400 > time.time() else False
 
 
 class BucketAcl(models.Model):
