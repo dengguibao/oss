@@ -315,6 +315,7 @@ def list_user_info_endpoint(request):
             )
         else:
             users = User.objects.select_related('profile').all()
+            print(users)
     else:
         username = req_user.username
         users = User.objects.select_related('profile').filter(
@@ -360,6 +361,11 @@ def get_user_detail_endpoint(request, user_id):
     :param user_id:
     :return:
     """
+    print(user_id)
+    u = User.objects.get(pk=user_id)
+    p = Profile.objects.get(user=u)
+    m = Money.objects.get(user=u)
+
     try:
         u = User.objects.get(pk=user_id)
         p = Profile.objects.get(user=u)
