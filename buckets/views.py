@@ -389,8 +389,9 @@ def set_buckets_endpoint(request):
                     'msg': 'illegal delete bucket'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            # 如果bucket未到期，不能删除，删除后不方便退费
-            if not bucket.check_bucket_expire():
+            # 如果bucket未到期，非强制，不能删除，删除后不方便退费
+            force_delete = request.GET.get('force_delete', False)
+            if not bucket.check_bucket_expire() and force_delete != 'yes':
                 return Response({
                     'code': 2,
                     'msg': 'bucket is not expire, can not delete'
@@ -413,6 +414,23 @@ def set_buckets_endpoint(request):
         'code': 0,
         'msg': 'success'
     }, status=status_code)
+
+
+@api_view(('GET', ))
+def query_bucket_name_exist_endpoint(request):
+    name = request.GET.get('name', None)
+    try:
+        Buckets.objects.get(name=name)
+    except:
+        exist = False
+    else:
+        exist = True
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'exist': exist
+    })
 
 
 def get_offset_value(code):

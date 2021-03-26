@@ -9,13 +9,6 @@ def verify_phone(phone: str) -> bool:
     return False if len(phone) != 11 or phone[0:2] not in ['13', '18', '15', '17'] else True
 
 
-def verify_in_array(arg1: str, array: tuple) -> bool:
-    """
-    verify arg1 whether in array
-    """
-    return True if arg1 in array else False
-
-
 def verify_is_equal(x, y):
     """
     verify two object whether equal
@@ -125,6 +118,18 @@ def verify_pk(i: int, model: object) -> bool:
     try:
         model.objects.get(pk=int(i))
     except:
+        return False
+    return True
+
+
+def verify_object_name(value: str) -> bool:
+    return True if re.match('^[a-zA-Z0-9_][a-zA-Z0-9_\\-]{1,61}[a-zA-Z]', value) else False
+
+
+def verify_object_path(value: str) -> bool:
+    if not value.endswith('/'):
+        return False
+    if not re.match('^[a-zA-Z0-9_][a-zA-Z0-9_\\-]{1,200}', value):
         return False
     return True
 

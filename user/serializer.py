@@ -13,6 +13,14 @@ class ProfileSerialize(ModelSerializer):
         )
 
 
+class SimpleUserSerialize(ModelSerializer):
+    class Meta:
+        model = User
+        field = (
+            'username', 'first_name'
+        )
+
+
 class UserSerialize(ModelSerializer):
     profile = ProfileSerialize(read_only=True)
     # profile = PrimaryKeyRelatedField(read_only=True)

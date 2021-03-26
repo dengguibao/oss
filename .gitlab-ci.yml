@@ -28,6 +28,7 @@ deploy:
   tags:
     - dev-ubuntu
   script:
+     - rm -f db.sqlite3
      - cp -rf * /home/oss/
      - python3 ./manage.py makemigrations
      - python3 ./manage.py migrate

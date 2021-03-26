@@ -11,6 +11,14 @@ class BucketTypeSerialize(ModelSerializer):
         )
 
 
+class SimpleBucketSerialize(ModelSerializer):
+    class Meta:
+        model = Buckets
+        fields = (
+            "name", "capacity", "duration",
+        )
+
+
 class BucketSerialize(ModelSerializer):
     user = UserSerialize(read_only=True)
     profile = ProfileSerialize(read_only=True)
