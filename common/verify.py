@@ -127,7 +127,7 @@ def verify_object_name(value: str) -> bool:
 
 
 def verify_object_path(value: str) -> bool:
-    if not value.endswith('/'):
+    if not value.endswith('/') or value.startswith('/'):
         return False
     if not re.match('^[a-zA-Z0-9_][a-zA-Z0-9_\\-]{1,200}', value):
         return False

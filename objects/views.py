@@ -51,7 +51,25 @@ def create_directory_endpoint(request):
     try:
         if 'path' in data:
             try:
-                Objects.objects.get(name=data['path'], type='d', owner=req_user, bucket_id=data['bucket_id'])
+                # 判断用户传过来的路程径是否为真实有效
+                # 利用模型的name和root联合匹配
+                # e.g.
+                #     aaa/bbb/ccc/
+                #     root:aaa/bbb/ sub_dir_name: ccc/
+                # ['aaa', 'bbb', 'ccc', '']
+                a = data['path'].split('/')
+                if len(a) > 2:
+                    # ccc/
+                    sub_dir_name = a[-2]+'/'
+                    del a[-2]
+                    # aaa/bbb/
+                    root_name = '/'.join(a)
+                    Objects.objects.get(name=sub_dir_name, root=root_name, type='d', owner=req_user, bucket_id=data['bucket_id'])
+
+                # 只有一层目录则只用查询名称
+                # aaa/  ['aaa', '']
+                if len(a) == 2:
+                    Objects.objects.get(name=data['path'], type='d', owner=req_user, bucket_id=data['bucket_id'])
             except:
                 return Response({
                     'code': 2,

@@ -315,7 +315,6 @@ def list_user_info_endpoint(request):
             )
         else:
             users = User.objects.select_related('profile').all()
-            print(users)
     else:
         username = req_user.username
         users = User.objects.select_related('profile').filter(
