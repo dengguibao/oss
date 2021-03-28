@@ -22,7 +22,7 @@ class Buckets(models.Model):
     duration = models.IntegerField(verbose_name="duration", default=0, blank=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user', null=True, blank=True)
     start_time = models.IntegerField(verbose_name='start time', blank=False, default=0)
-    bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True, related_name='bucket_type')
+    # bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True, related_name='bucket_type')
     state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False)
     create_time = models.DateTimeField(auto_now=True)
 

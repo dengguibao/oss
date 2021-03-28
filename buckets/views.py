@@ -197,12 +197,12 @@ def set_offset_endpoint(request):
         }, status=status_code)
 
 
-@api_view(('GET', 'POST', 'PUT', 'DELETE'))
+@api_view(('GET', 'POST', 'DELETE'))
 @verify_body
 def set_buckets_endpoint(request):
     if request.method == 'GET':
         # 联合查询bucket user profile表
-        obj = Buckets.objects.select_related('user').select_related('user__profile').select_related('bucket_type')
+        obj = Buckets.objects.select_related('user').select_related('user__profile')
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
             res = obj.filter(user=request.user)
@@ -220,6 +220,7 @@ def set_buckets_endpoint(request):
         page.page_size = page_size
         page.number = cur_page
         page.max_page_size = 20
+
         ret = page.paginate_queryset(res, request)
         ser = BucketSerialize(ret, many=True)
         # 返回计求数据
@@ -251,12 +252,12 @@ def set_buckets_endpoint(request):
         fields = [
             ('*name', str, verify_bucket_name),
             # 最多购买1TB
-            ('*capacity', int, (verify_max_value, 1024)),
-            ('*bucket_type_id', int, (verify_pk, BucketType)),
+            # ('*capacity', int, (verify_max_value, 1024)),
+            # ('*bucket_type_id', int, (verify_pk, BucketType)),
             # 仅支持最多购买5年
-            ('*duration', int, (verify_max_value, 365 * 5)),
+            # ('*duration', int, (verify_max_value, 365 * 5)),
             # 折扣券
-            ('offset_code', str, (verify_length, 8))
+            # ('offset_code', str, (verify_length, 8))
         ]
     # 删除操作仅需提供bucket_id，具体删除是会验证删除者身份与bucket拥有者的身份
     if request.method == 'DELETE':
@@ -264,14 +265,14 @@ def set_buckets_endpoint(request):
             ('*bucket_id', int, (verify_pk, Buckets))
         ]
     # 续期bucket需要提供购买时长 优惠码（可选） bucket_id
-    if request.method == 'PUT':
-        fields = [
-            ('*bucket_id', int, (verify_pk, Buckets)),
-            # 仅支持最多购买5年
-            ('*duration', int, (verify_max_value, 365 * 5)),
-            # 折扣券
-            ('offset_code', str, (verify_length, 8))
-        ]
+    # if request.method == 'PUT':
+    #     fields = [
+    #         ('*bucket_id', int, (verify_pk, Buckets)),
+    #         # 仅支持最多购买5年
+    #         ('*duration', int, (verify_max_value, 365 * 5)),
+    #         # 折扣券
+    #         ('offset_code', str, (verify_length, 8))
+    #     ]
 
     # 数据过滤与验证
     data = verify_field(request.body, tuple(fields))
@@ -286,38 +287,34 @@ def set_buckets_endpoint(request):
     try:
         # 创建bucket
         if request.method == 'POST':
-            try:
-                Buckets.objects.get(name=data['name'])
-            except:
-                pass
-            else:
+            if query_bucket_exist(data['name']):
                 return Response({
                     'code': 2,
                     'msg': 'the bucket is already exist!'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            bt = BucketType.objects.get(pk=data['bucket_type_id'])
-            price = bt.price
-
-            m = Money.objects.get(user=req_user)
-
-            # 默认折扣值为1，即不打拆，也不加价
-            off_value = 1
-            off_code = None
-            if 'offset_code' in data:
-                off_code = data['offset_code']
-                off_value = get_offset_value(off_code)
-                del data['offset_code']
+            # bt = BucketType.objects.get(pk=data['bucket_type_id'])
+            # price = bt.price
+            #
+            # m = Money.objects.get(user=req_user)
+            #
+            # # 默认折扣值为1，即不打拆，也不加价
+            # off_value = 1
+            # off_code = None
+            # if 'offset_code' in data:
+            #     off_code = data['offset_code']
+            #     off_value = get_offset_value(off_code)
+            #     del data['offset_code']
 
             # 购买容量*每月价*购买月数*折扣优惠
-            need_money = (data['capacity'] * price * (data['duration'] / 30)) * off_value
-
-            # 判断余额是足购
-            if m.amount < need_money:
-                return Response({
-                    'code': 2,
-                    'msg': 'user amount is not enough!',
-                })
+            # need_money = (data['capacity'] * price * (data['duration'] / 30)) * off_value
+            #
+            # # 判断余额是足购
+            # if m.amount < need_money:
+            #     return Response({
+            #         'code': 2,
+            #         'msg': 'user amount is not enough!',
+            #     })
 
             data['user_id'] = req_user.id
             data['start_time'] = int(time.time())
@@ -328,57 +325,57 @@ def set_buckets_endpoint(request):
             s3.create_bucket(Bucket=data['name'])
 
             # 利用管理员key为新创建的bucket设置配额
-            rgw = init_rgw_api()
-            rgw.set_bucket_quota(
-                req_user.username,
-                bucket=data['name'],
-                max_size_kb=data['capacity'] * 1024 * 1024,
-                enabled=True
-            )
+            # rgw = init_rgw_api()
+            # rgw.set_bucket_quota(
+            #     req_user.username,
+            #     bucket=data['name'],
+            #     # max_size_kb=data['capacity'] * 1024 * 1024,
+            #     enabled=True
+            # )
             # -------- ceph bucket成功创建 ---------
 
             # 本地数据库插入记录
             model.objects.create(**data)
             # 更新优惠码
-            if off_code:
-                update_off_code(off_code)
-            # 更新用户余额
-            m.cost(data['capacity'] * price * (data['duration'] / 30))
+            # if off_code:
+            #     update_off_code(off_code)
+            # # 更新用户余额
+            # m.cost(data['capacity'] * price * (data['duration'] / 30))
             status_code = HTTP_201_CREATED
 
         # 目前仅支持修改bucket可用时长
-        if request.method == 'PUT':
-            b = model.objects.select_related('bucket_type').get(pk=data['bucket_id'])
-            m = Money.objects.get(user=req_user.id)
-            # 价格
-            price = b.bucket_type.price
-            # 用户额
-            amount = m.amount
-
-            off_value = 1
-            off_code = None
-            if 'offset_code' in data:
-                off_code = data['offset_code']
-                off_value = get_offset_value(off_code)
-                del data['offset_code']
-
-            # 原始续期空间大小*续期时长（月）*价格*优惠折扣
-            need_money = (b.capacity * (data['duration'] / 30) * price) * off_value
-            # 余额不足
-            if need_money > amount:
-                return Response({
-                    'code': 2,
-                    'msg': 'user amount is not enough'
-                }, status=HTTP_400_BAD_REQUEST)
-
-            # 更新用户到期时间和开始计费时间
-            b.renewal(data['duration'])
-            # 更新用户余额
-            m.cost(need_money)
-            # 更新折扣码，使用次数+1
-            if off_code:
-                update_off_code(data['offset_code'])
-            status_code = HTTP_200_OK
+        # if request.method == 'PUT':
+        #     b = model.objects.select_related('bucket_type').get(pk=data['bucket_id'])
+        #     m = Money.objects.get(user=req_user.id)
+        #     # 价格
+        #     price = b.bucket_type.price
+        #     # 用户额
+        #     amount = m.amount
+        #
+        #     off_value = 1
+        #     off_code = None
+        #     if 'offset_code' in data:
+        #         off_code = data['offset_code']
+        #         off_value = get_offset_value(off_code)
+        #         del data['offset_code']
+        #
+        #     # 原始续期空间大小*续期时长（月）*价格*优惠折扣
+        #     need_money = (b.capacity * (data['duration'] / 30) * price) * off_value
+        #     # 余额不足
+        #     if need_money > amount:
+        #         return Response({
+        #             'code': 2,
+        #             'msg': 'user amount is not enough'
+        #         }, status=HTTP_400_BAD_REQUEST)
+        #
+        #     # 更新用户到期时间和开始计费时间
+        #     b.renewal(data['duration'])
+        #     # 更新用户余额
+        #     m.cost(need_money)
+        #     # 更新折扣码，使用次数+1
+        #     if off_code:
+        #         update_off_code(data['offset_code'])
+        #     status_code = HTTP_200_OK
 
         if request.method == 'DELETE':
             # 即不是超级管理员，也不是bucket拥有者，提示非异操作
@@ -389,13 +386,13 @@ def set_buckets_endpoint(request):
                     'msg': 'illegal delete bucket'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            # 如果bucket未到期，非强制，不能删除，删除后不方便退费
-            force_delete = request.GET.get('force_delete', False)
-            if not bucket.check_bucket_expire() and force_delete != 'yes':
-                return Response({
-                    'code': 2,
-                    'msg': 'bucket is not expire, can not delete'
-                }, status=HTTP_400_BAD_REQUEST)
+            # # 如果bucket未到期，非强制，不能删除，删除后不方便退费
+            # force_delete = request.GET.get('force_delete', False)
+            # if not bucket.check_bucket_expire() and force_delete != 'yes':
+            #     return Response({
+            #         'code': 2,
+            #         'msg': 'bucket is not expire, can not delete'
+            #     }, status=HTTP_400_BAD_REQUEST)
 
             status_code = HTTP_200_OK
             # ceph集群删除bucket
@@ -419,18 +416,21 @@ def set_buckets_endpoint(request):
 @api_view(('GET', ))
 def query_bucket_name_exist_endpoint(request):
     name = request.GET.get('name', None)
-    try:
-        Buckets.objects.get(name=name)
-    except:
-        exist = False
-    else:
-        exist = True
-
+    ret = query_bucket_exist(name)
     return Response({
         'code': 0,
         'msg': 'success',
-        'exist': exist
+        'exist': ret
     })
+
+
+def query_bucket_exist(name):
+    try:
+        Buckets.objects.get(name=name)
+    except:
+        return False
+    else:
+        return True
 
 
 def get_offset_value(code):

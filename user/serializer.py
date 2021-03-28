@@ -16,7 +16,7 @@ class ProfileSerialize(ModelSerializer):
 class SimpleUserSerialize(ModelSerializer):
     class Meta:
         model = User
-        field = (
+        fields = (
             'username', 'first_name'
         )
 

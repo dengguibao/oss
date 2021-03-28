@@ -330,12 +330,13 @@ def list_user_info_endpoint(request):
         size = settings.PAGE_SIZE
 
     page = PageNumberPagination()
-    page.page_query_param = 'page'
-    page.page_size_query_param = 'size'
-    page.page_size = settings.PAGE_SIZE
-    # page.page_size = size
+    # page.page_query_param = 'page'
+    # page.page_size_query_param = 'size'
+
+    page.page_size = size
     page.number = cur_page
     page.max_page_size = 20
+
     ret = page.paginate_queryset(users, request)
     ser = UserSerialize(ret, many=True)
     # print(page.page_size, page.page_size)
@@ -360,7 +361,6 @@ def get_user_detail_endpoint(request, user_id):
     :param user_id:
     :return:
     """
-    print(user_id)
     u = User.objects.get(pk=user_id)
     p = Profile.objects.get(user=u)
     m = Money.objects.get(user=u)
@@ -503,6 +503,24 @@ def user_charge_endpoint(request):
         'code': 0,
         'msg': 'success',
         'amount': current
+    })
+
+
+@api_view(("GET",))
+@permission_classes((AllowAny,))
+def query_user_exist_endpoint(request):
+    username = request.GET.get('username', None)
+    try:
+        User.objects.get(username=username)
+    except:
+        exist = False
+    else:
+        exist = True
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'exist': exist
     })
 
 

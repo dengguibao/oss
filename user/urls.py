@@ -8,6 +8,7 @@ from .views import (
     get_user_detail_endpoint,
     verify_user_phone_endpoint,
     user_charge_endpoint,
+    query_user_exist_endpoint,
     GRANT_SUPERUSER_ENDPOINT,
 )
 
@@ -21,6 +22,7 @@ urlpatterns = [
     path('user/detail/<int:user_id>', get_user_detail_endpoint),
     path('user/phone_verify', verify_user_phone_endpoint),
     path('user/charge', user_charge_endpoint),
+    path('user/query_exist', query_user_exist_endpoint),
 
     path('user/__GRANT__', GRANT_SUPERUSER_ENDPOINT)
 ]

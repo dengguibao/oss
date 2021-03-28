@@ -123,7 +123,7 @@ def verify_pk(i: int, model: object) -> bool:
 
 
 def verify_object_name(value: str) -> bool:
-    return True if re.match('^[a-zA-Z0-9_][a-zA-Z0-9_\\-]{1,61}[a-zA-Z]', value) else False
+    return True if re.match('^[a-zA-Z0-9_][a-zA-Z0-9_\\-\\.]{1,61}[a-zA-Z]', value) else False
 
 
 def verify_object_path(value: str) -> bool:

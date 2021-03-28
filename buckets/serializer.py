@@ -15,7 +15,7 @@ class SimpleBucketSerialize(ModelSerializer):
     class Meta:
         model = Buckets
         fields = (
-            "name", "capacity", "duration",
+            "name",
         )
 
 
@@ -40,7 +40,7 @@ class BucketSerialize(ModelSerializer):
             "name", "capacity", "duration",
             "start_time", "state", "user",
             "profile", "bucket_type", 'bucket_id',
-            'cn_status'
+            'cn_status', 'create_time'
         )
 
         # read_only_fields = (
