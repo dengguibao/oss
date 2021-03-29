@@ -337,7 +337,7 @@ def list_user_info_endpoint(request):
     page.number = cur_page
     page.max_page_size = 20
 
-    ret = page.paginate_queryset(users, request)
+    ret = page.paginate_queryset(users.order_by('-id'), request)
     ser = UserSerialize(ret, many=True)
     # print(page.page_size, page.page_size)
     return Response({

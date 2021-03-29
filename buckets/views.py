@@ -221,7 +221,7 @@ def set_buckets_endpoint(request):
         page.number = cur_page
         page.max_page_size = 20
 
-        ret = page.paginate_queryset(res, request)
+        ret = page.paginate_queryset(res.order_by('-bucket_id'), request)
         ser = BucketSerialize(ret, many=True)
         # 返回计求数据
         return Response({

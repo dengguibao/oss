@@ -195,12 +195,17 @@ def list_objects_endpoint(request):
     # page.page_size = size
     page.number = cur_page
     page.max_page_size = 20
-    ret = page.paginate_queryset(res, request)
+    ret = page.paginate_queryset(res.order_by('-obj_id'), request)
     ser = ObjectsSerialize(ret, many=True)
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': ser.data
+        'data': ser.data,
+        'page_info': {
+            'record_count': len(res),
+            'pag_size': size,
+            'current_page': cur_page,
+        }
     })
 
 
