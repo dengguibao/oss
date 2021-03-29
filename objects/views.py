@@ -1,5 +1,5 @@
 from rest_framework.status import (
-    HTTP_200_OK, HTTP_201_CREATED, HTTP_404_NOT_FOUND,
+    HTTP_201_CREATED, HTTP_404_NOT_FOUND,
     HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
 )
 from rest_framework.response import Response
@@ -11,13 +11,12 @@ from django.http import StreamingHttpResponse
 from buckets.models import Buckets
 
 from common.verify import (
-    verify_body, verify_pk, verify_object_name,
+    verify_body, verify_object_name,
     verify_field, verify_object_path, verify_bucket_name
 )
-from common.func import init_s3_connection
+from common.func import init_s3_connection, verify_path, build_tmp_filename, file_iter
 from .serializer import ObjectsSerialize
 from .models import Objects
-import random
 import hashlib
 import os
 
@@ -31,20 +30,25 @@ def create_directory_endpoint(request):
         ('*folder_name', str, verify_object_name),
         ('path', str, verify_object_path)
     )
+    # 检验字段
     data = verify_field(request.body, _fields)
     if not isinstance(data, dict):
         return Response({
             'code': 1,
             'msg': data
         }, status=HTTP_400_BAD_REQUEST)
-
-    b = Buckets.objects.get(name=data['bucket_name'])
-    if req_user.id != b.user_id:
+    # 检验bucket name是否为非法
+    try:
+        b = Buckets.objects.get(name=data['bucket_name'])
+    except:
+        b = None
+    if not b or req_user.id != b.user_id:
         return Response({
             'code': 2,
             'msg': 'illegal request, error bucket name'
         })
 
+    # 验证access_key与secret_key
     access_key = req_user.profile.access_key
     secret_key = req_user.profile.secret_key
     if not access_key or not secret_key:
@@ -68,9 +72,10 @@ def create_directory_endpoint(request):
         else:
             key = data['folder_name']+'/'
 
+        # 初始化s3客户端
         s3 = init_s3_connection(access_key, secret_key)
         d = s3.put_object(Bucket=b.name, Body=b'', Key=key)
-
+        # 创建空对象，目录名为空对象
         Objects.objects.create(
             name=data['folder_name']+'/',
             bucket=b,
@@ -97,6 +102,7 @@ def create_directory_endpoint(request):
 @api_view(('DELETE',))
 def delete_object_endpoint(request):
     req_user = request.user
+    # 验证obj_id是否为非法id
     try:
         obj_id = request.GET.get('obj_id', 0)
         o = Objects.objects.get(obj_id=int(obj_id))
@@ -112,11 +118,13 @@ def delete_object_endpoint(request):
             'msg': 'permission denied!'
         }, status=HTTP_403_FORBIDDEN)
 
+    # get access_key secret_key
     access_key = req_user.profile.access_key
     secret_key = req_user.profile.secret_key
     try:
         s3 = init_s3_connection(access_key, secret_key)
         delete_list = []
+        # 如果删除的对象为目录，则删除该目录下的所有一切对象
         if o.type == 'd':
             root_pth = '' if o.root is None else o.root
             obj_name = o.name
@@ -124,15 +132,17 @@ def delete_object_endpoint(request):
             delete_list.append(
                 (o.obj_id, o.key)
             )
-            for i in Objects.objects.filter(root__startswith=key, owner=req_user).all():
+            for i in Objects.objects.filter(root__startswith=key, owner=req_user, bucket=o.bucket).all():
                 delete_list.append(
                     (i.obj_id, i.key)
                 )
+        # 如果删除的对象是文件，则只该对象
         if o.type == 'f':
             delete_list.append(
                 (o.obj_id, o.key)
             )
 
+        # 使用s3 client删除对象和对应的数据库映射记录
         for del_id, del_key in delete_list:
             s3.delete_object(
                 Bucket=o.bucket.name,
@@ -201,21 +211,20 @@ def put_object_endpoint(request):
     # filename = request.POST.get('filename', None)
     file = request.FILES.get('file', None)
     path = request.POST.get('path', None)
-
-    if not file:
+    # 如果没有文件，则直接响应异常
+    if not file or not bucket_name:
         return Response({
             'code': 1,
-            'msg': 'no upload file'
+            'msg': 'some required field is mission!'
         }, status=HTTP_400_BAD_REQUEST)
 
     filename = file.name
-    err = True
-    if not bucket_name:
-        pass
+
+    # 验证bucket是否为异常bucket
     try:
         b = Buckets.objects.get(user=req_user, name=bucket_name)
     except:
-        pass
+        err = True
     else:
         err = False
 
@@ -225,9 +234,8 @@ def put_object_endpoint(request):
             'msg': 'not found this bucket'
         })
 
-    p = None
-    if path and not path.startswith('/') and path.endswith('/'):
-        p = verify_path(path)
+    # 验证路程是否为非常路径（目录）
+    p = verify_path(path)
 
     if p and p.owner != req_user and p.bucket.name != bucket_name:
         return Response({
@@ -235,14 +243,15 @@ def put_object_endpoint(request):
             'msg': 'path error'
         }, status=HTTP_400_BAD_REQUEST)
 
+    # 验证文件名是否超长
     if len(filename) > 63:
         return Response({
             'code': 1,
             'msg': 'filename to long'
         }, status=HTTP_400_BAD_REQUEST)
 
+    # 将用户上传的文件写入临时文件，生成md5，然后再分批写入后端rgw
     temp_file = build_tmp_filename()
-
     md5 = hashlib.md5()
     with open(temp_file, 'wb') as f:
         for chunk in file.chunks():
@@ -259,9 +268,8 @@ def put_object_endpoint(request):
 
     try:
         s3 = init_s3_connection(access_key, secret_key)
-
-        if p and p.root:
-            root = p.root+p.name
+        if p:
+            root = path
         else:
             root = ''
 
@@ -320,7 +328,7 @@ def put_object_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success'
-    })
+    }, status=HTTP_201_CREATED)
 
 
 @api_view(('GET',))
@@ -354,48 +362,3 @@ def download_object_endpoint(request):
     res['Content-Type'] = 'application/octet-stream'
     res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
     return res
-
-
-def file_iter(filename):
-    if not os.path.exists(filename) or not os.path.isfile(filename):
-        return
-    with open(filename, 'rb') as fp:
-        while 1:
-            d = fp.read(4096)
-            if d:
-                yield d
-            else:
-                break
-        os.remove(filename)
-
-
-def verify_path(path):
-    # 判断用户传过来的路程径是否为真实有效
-    # 利用模型的name和root联合匹配
-    # e.g.
-    #     aaa/bbb/ccc/
-    #     root:aaa/bbb/ sub_dir_name: ccc/
-    # ['aaa', 'bbb', 'ccc', '']
-    try:
-        obj = Objects.objects.select_related("bucket")
-        a = path.split('/')
-        if len(a) > 2:
-            # ccc/
-            sub_dir_name = a[-2] + '/'
-            del a[-2]
-            # aaa/bbb/
-            root_name = '/'.join(a)
-            return obj.get(name=sub_dir_name, root=root_name, type='d')
-
-        # 只有一层目录则只用查询名称
-        # aaa/  ['aaa', '']
-        if len(a) == 2:
-            return obj.get(name=path, type='d')
-    except:
-        return False
-
-
-def build_tmp_filename():
-    rand_str = ''.join(random.sample('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 10))
-    file_name = '/tmp/ceph_oss_%s.dat' % rand_str
-    return file_name

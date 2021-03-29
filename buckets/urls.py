@@ -4,6 +4,7 @@ from .views import (
     set_bucket_type_endpoint,
     set_buckets_endpoint,
     query_bucket_name_exist_endpoint,
+    get_bucket_detail_endpoint,
 )
 
 urlpatterns = [
@@ -11,4 +12,5 @@ urlpatterns = [
     path('buckets/offset', set_offset_endpoint),
     path('buckets/bucket', set_buckets_endpoint),
     path('buckets/query_exist', query_bucket_name_exist_endpoint),
+    path('buckets/detail', get_bucket_detail_endpoint)
 ]

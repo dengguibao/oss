@@ -424,6 +424,39 @@ def query_bucket_name_exist_endpoint(request):
     })
 
 
+@api_view(('GET',))
+def get_bucket_detail_endpoint(request):
+    bucket_name = request.GET.get('bucket_name', None)
+    req_user = request.user
+
+    try:
+        b = Buckets.objects.get(name=bucket_name)
+    except:
+        b = None
+
+    if not b or b.user != req_user or not req_user.is_superuser:
+        return Response({
+            'code': 1,
+            'msg': 'not found this bucket'
+        }, status=HTTP_400_BAD_REQUEST)
+
+    try:
+        rgw = init_rgw_api()
+        data = rgw.get_bucket(bucket=bucket_name)
+    except Exception as e:
+        return Response({
+            'code': 1,
+            'msg': 'get bucket detail failed',
+            'error': str(e)
+        }, status=HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'data': data
+    })
+
+
 def query_bucket_exist(name):
     try:
         Buckets.objects.get(name=name)
