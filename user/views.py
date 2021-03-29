@@ -524,8 +524,52 @@ def query_user_exist_endpoint(request):
     })
 
 
+@api_view(("GET",))
+@permission_classes((AllowAny,))
+def query_user_usage(request):
+    req_user = request.user
+    username = request.GET.get('username', None)
+    start_time = request.GET.get('start', None)
+    end_time = request.GET.get('end', None)
+
+    fmt = '%F'
+
+    u = False
+    try:
+        u = User.objects.get(username=username)
+    except:
+        pass
+
+    if not u or (u != req_user and not req_user.is_superuser):
+        return Response({
+            'code': 1,
+            'msg': 'not found this user'
+        }, status=HTTP_400_BAD_REQUEST)
+
+    if not start_time or not check_date_format(start_time):
+        start_time = time.strftime(fmt, time.localtime())
+
+    if not end_time or not check_date_format(end_time):
+        end_time = time.strftime(fmt, time.localtime())
+
+    rgw = init_rgw_api()
+    data = rgw.get_usage(
+        uid=username,
+        start=start_time,
+        end=end_time,
+        show_summary=True,
+        show_entries=True
+    )
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'data': data
+    })
+
+
 @api_view(('GET',))
-def GRANT_SUPERUSER_ENDPOINT(request):
+def __GRANT_SUPERUSER_ENDPOINT__(request):
     user = request.user
     u = User.objects.get(user=user)
     u.is_superuser = 1
@@ -533,3 +577,13 @@ def GRANT_SUPERUSER_ENDPOINT(request):
     return Response({
         'msg': 'success'
     }, status=HTTP_200_OK)
+
+
+def check_date_format(s: str) -> bool:
+    try:
+        fmt = '%Y-%m-%d'
+        time.strptime(s, fmt)
+    except Exception as e:
+        return False
+
+    return True
