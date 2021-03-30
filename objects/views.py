@@ -2,6 +2,7 @@ from rest_framework.status import (
     HTTP_201_CREATED, HTTP_404_NOT_FOUND,
     HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
 )
+from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import api_view
@@ -9,7 +10,7 @@ from django.conf import settings
 from django.http.response import Http404
 from django.http import StreamingHttpResponse
 from buckets.models import Buckets
-
+from django.db.models import Q
 from common.verify import (
     verify_body, verify_object_name,
     verify_field, verify_object_path, verify_bucket_name
@@ -179,8 +180,12 @@ def list_objects_endpoint(request):
             'msg': 'not found this bucket'
         })
     res = Objects.objects.select_related('bucket').select_related('owner').filter(owner=req_user, bucket=b)
+
     if path:
         res = res.filter(root=path.replace(',', '/'))
+    else:
+        res = res.filter(Q(root=None) | Q(root=''))
+
     try:
         cur_page = int(request.GET.get('page', 1))
         size = int(request.GET.get('size', settings.PAGE_SIZE))
@@ -195,7 +200,7 @@ def list_objects_endpoint(request):
     # page.page_size = size
     page.number = cur_page
     page.max_page_size = 20
-    ret = page.paginate_queryset(res.order_by('-obj_id'), request)
+    ret = page.paginate_queryset(res.order_by('type', '-obj_id'), request)
     ser = ObjectsSerialize(ret, many=True)
     return Response({
         'code': 0,
@@ -209,7 +214,7 @@ def list_objects_endpoint(request):
     })
 
 
-@api_view(('PUT',))
+@api_view(('PUT', 'POST',))
 def put_object_endpoint(request):
     req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
@@ -224,6 +229,10 @@ def put_object_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     filename = file.name
+    if ',' in filename:
+        raise ParseError({
+            'detail': 'filename contain special char'
+        })
 
     # 验证bucket是否为异常bucket
     try:
@@ -345,14 +354,14 @@ def download_object_endpoint(request):
     except:
         pass
 
-    if (obj and obj.owner != req_user) or not obj:
-        return Http404
+    if (obj and obj.owner != req_user) or not obj or obj.type == 'd':
+        raise Http404
 
     access_key = req_user.profile.access_key
     secret_key = req_user.profile.secret_key
 
     if not secret_key or not secret_key:
-        return Http404
+        raise Http404
 
     s3 = init_s3_connection(access_key, secret_key)
     tmp = build_tmp_filename()
