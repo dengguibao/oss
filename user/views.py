@@ -173,6 +173,7 @@ def user_login_endpoint(request):
             'user_id': user.pk,
             'username': user.username,
             'phone_verify': user.profile.phone_verify,
+            'phone_number': user.profile.phone,
             'user_type': 'superuser' if user.is_superuser else 'normal',
         }
     }, status=HTTP_200_OK)
@@ -443,7 +444,7 @@ def verify_user_phone_endpoint(request):
                 uid=user.username,
                 display_name=user.first_name,
                 generate_key=True,
-                email=user.email,
+                # email=user.email,
                 user_caps='usage=read; user=read,write; buckets=read,write',
                 max_buckets=100
             )
