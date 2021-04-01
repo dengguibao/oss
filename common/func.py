@@ -2,9 +2,11 @@ from rgwadmin import RGWAdmin
 from boto3.session import Session
 from django.conf import settings
 from objects.models import Objects
+from buckets.models import BucketRegion
+from django.contrib.auth.models import User
 import random
 import os
-
+import uuid
 
 def init_rgw_api():
     access_key, secret_key, server = settings.RGW_API_KEY['NORMAL']
@@ -57,3 +59,56 @@ def build_tmp_filename():
     rand_str = ''.join(random.sample('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 10))
     file_name = '/tmp/ceph_oss_%s.dat' % rand_str
     return file_name
+
+
+def rgw_client(region_id: int):
+    try:
+        b = BucketRegion.objects.get(reg_id=region_id)
+    except:
+        return
+
+    return RGWAdmin(
+        access_key=b.access_key,
+        secret_key=b.secret_key,
+        server=b.server,
+        secure=False,
+        verify=False
+    )
+
+
+def s3_client(reg_id: int, username: str):
+    u = User.objects.get(username=username)
+    if not u.profile.phone_verify:
+        return
+    region = BucketRegion.objects.get(reg_id=reg_id)
+    rgw = rgw_client(reg_id)
+    try:
+        rgw.get_user(uid=u.profile.ceph_uid)
+    except:
+
+        rgw.create_user(
+            uid=u.profile.ceph_uid,
+            access_key=u.profile.access_key,
+            secret_key=u.profile.secret_key,
+            display_name=u.first_name,
+            user_caps='buckets=read,write;user=read,write;usage=read'
+        )
+        print('1111')
+    conn = Session(
+        aws_access_key_id=u.profile.access_key,
+        aws_secret_access_key=u.profile.secret_key
+    )
+    client = conn.client(
+        service_name='s3',
+        endpoint_url='http://%s' % region.server,
+        verify=False
+    )
+    return client
+
+
+def build_ceph_userinfo(username: str) -> tuple:
+    x = str(uuid.uuid3(uuid.NAMESPACE_DNS, username)).replace('-', '')
+    secret_key = str(uuid.uuid4()).replace('-', '')
+    uid = x[0:8]
+    access_key = x[9:]
+    return uid, access_key, secret_key

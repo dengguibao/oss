@@ -9,7 +9,7 @@ class ProfileSerialize(ModelSerializer):
     class Meta:
         model = Profile
         fields = (
-            'phone', 'phone_verify', 'is_subuser'
+            'phone', 'phone_verify', 'is_subuser', 'ceph_uid'
         )
 
 

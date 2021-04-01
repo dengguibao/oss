@@ -13,13 +13,13 @@ from django.conf import settings
 from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
-
+from buckets.models import BucketRegion, Buckets
 from common.verify import (
     verify_field, verify_mail, verify_username,
     verify_phone, verify_body, verify_length,
     verify_max_length, verify_max_value
 )
-from common.func import init_rgw_api
+from common.func import build_ceph_userinfo, rgw_client
 from .serializer import UserSerialize
 from .models import Profile, Money
 
@@ -266,7 +266,7 @@ def user_delete_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     try:
-        u = User.objects.get(pk=data['user_id'])
+        u = User.objects.select_related('profile').get(pk=data['user_id'])
     except:
         return Response({
             'code': 1,
@@ -280,17 +280,16 @@ def user_delete_endpoint(request):
             }, status=HTTP_400_BAD_REQUEST)
 
     if u.profile.phone_verify:
-        rgw = init_rgw_api()
-        try:
-            if u.profile.is_subuser:
-                rgw.remove_subuser(uid=u.profile.parent_uid, subuser=u.username, purge_keys=True)
+        region = BucketRegion.objects.all()
+        # 递归删除所有区域集群上的用户
+        for i in region:
+            rgw = rgw_client(i.reg_id)
+            try:
+                rgw.get_user(uid=u.profile.ceph_uid, stats=True)
+            except:
+                continue
             else:
-                rgw.remove_user(uid=u.username, purge_data=True)
-        except Exception as e:
-            return Response({
-                'code': 1,
-                'msg': 'ceph radows remove user failed, ceph response mesage is %s' % e.args[0]
-            }, status=HTTP_200_OK)
+                rgw.remove_user(uid=u.profile.ceph_uid, purge_data=True)
     u.delete()
     return Response({
         'code': 1,
@@ -363,13 +362,13 @@ def get_user_detail_endpoint(request, user_id):
     :return:
     """
     u = User.objects.get(pk=user_id)
-    p = Profile.objects.get(user=u)
-    m = Money.objects.get(user=u)
 
     try:
         u = User.objects.get(pk=user_id)
         p = Profile.objects.get(user=u)
         m = Money.objects.get(user=u)
+        b = Buckets.objects.filter(user=u)
+
 
     except:
         return Response({
@@ -398,7 +397,8 @@ def get_user_detail_endpoint(request, user_id):
         'data': {
             'user': u_d,
             'profile': p_d,
-            'money': m_d
+            'money': m_d,
+            'bucket': list(b.values())
         }
     })
 
@@ -430,38 +430,13 @@ def verify_user_phone_endpoint(request):
             'code': 1,
             'msg': 'phone error!',
         }, status=HTTP_400_BAD_REQUEST)
-
-    rgw = init_rgw_api()
-    try:
-        if user.profile.is_subuser:
-            rados_user = rgw.create_subuser(
-                uid=user.profile.parent_uid,
-                subuser=user.username,
-                generate_secret=True,
-            )
-        else:
-            rados_user = rgw.create_user(
-                uid=user.username,
-                display_name=user.first_name,
-                generate_key=True,
-                # email=user.email,
-                user_caps='usage=read; user=read,write; buckets=read,write',
-                max_buckets=100
-            )
-
-        access_key = rados_user['keys'][0]['access_key']
-        secret_key = rados_user['keys'][0]['secret_key']
-        Profile.objects.filter(user=user).update(
-            phone_verify=True,
-            access_key=access_key,
-            secret_key=secret_key
-        )
-
-    except Exception as e:
-        return Response({
-            'code': 1,
-            'msg': 'radow create user failed, ceph response error %s' % e.args[0]
-        })
+    uid, access_key, secret_key = build_ceph_userinfo(user.username)
+    Profile.objects.get(user=user).update(
+        phone_verify=True,
+        access_key=access_key,
+        secret_key=secret_key,
+        ceph_uid=uid
+    )
 
     return Response({
         'code': 0,
@@ -553,19 +528,31 @@ def query_user_usage(request):
     if not end_time or not check_date_format(end_time):
         end_time = time.strftime(fmt, time.localtime())
 
-    rgw = init_rgw_api()
-    data = rgw.get_usage(
-        uid=username,
-        start=start_time,
-        end=end_time,
-        show_summary=True,
-        show_entries=True
-    )
+    usage_data = []
+    reg = BucketRegion.objects.all()
+    for i in reg:
+        rgw = rgw_client(i.reg_id)
+        try:
+            rgw.get_user(uid=req_user.profile.ceph_uid)
+        except:
+            continue
+
+        data = rgw.get_usage(
+            uid=username,
+            start=start_time,
+            end=end_time,
+            show_summary=True,
+            show_entries=True
+        )
+        usage_data.append({
+            'region': i.name,
+            'usage_data': data
+        })
 
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': data
+        'data': usage_data
     })
 
 

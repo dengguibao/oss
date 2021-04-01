@@ -1,5 +1,3 @@
-# from django.shortcuts import render
-# from django.contrib.auth.models import User
 from django.conf import settings
 
 from rest_framework.decorators import api_view
@@ -8,15 +6,15 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.status import (
     HTTP_200_OK, HTTP_400_BAD_REQUEST,
     HTTP_201_CREATED, HTTP_403_FORBIDDEN,
-    HTTP_404_NOT_FOUND
 )
-from user.models import Money
-from .models import BucketType, Buckets, Offset
+
+from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
     verify_max_length, verify_body, verify_field, verify_length,
-    verify_bucket_name, verify_max_value, verify_pk
+    verify_bucket_name, verify_max_value, verify_pk,
+    verify_true_false, verify_in_array
 )
-from common.func import init_s3_connection, init_rgw_api
+from common.func import rgw_client, s3_client
 from .serializer import BucketSerialize
 import time
 
@@ -95,52 +93,37 @@ def set_bucket_type_endpoint(request):
 
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
 @verify_body
-def set_offset_endpoint(request):
+def set_bucket_region_endpoint(request):
     """
-    折扣码访问入口
+    存储区域
     :param request:
     :return:
     """
-    model = Offset
+    model = BucketRegion
     fields = [
-        ('*code', str, (verify_length, 8)),
-        ('*offset', float, (verify_max_value, 10)),
-        ('*max_use_times', int, (verify_max_value, 9999)),
-        ('*valid_days', int, (verify_max_value, 365)),
+        ('*name', str, (verify_max_length, 20)),
+        ('*secret_key', str, (verify_max_length, 50)),
+        ('*access_key', str, (verify_max_length, 32)),
+        ('*server', str, (verify_max_length, 20)),
     ]
     id_field = (
-        ('*off_id', int, (verify_pk, Offset)),
+        ('*reg_id', int, (verify_pk, model)),
     )
 
     # get请求
     if request.method == 'GET':
-        # 根据拆扣码查询对应的拆扣
-        code = request.GET.get('code', None)
-        if code:
-            try:
-                o = model.objects.get(code=code)
-            except:
-                return Response({
-                    'code': 1,
-                    'msg': 'invalid off code',
-                }, status=HTTP_404_NOT_FOUND)
-            else:
-                return Response({
-                    'code': 0,
-                    'msg': 'success',
-                    'data': {
-                        'value': o.get_offset_value()
-                    }
-                }, status=HTTP_200_OK)
-
+        o = model.objects.all()
         # 管理员则可以查看所有的折扣码情况
         if request.user.is_superuser:
-            o = model.objects.all().values()
-            return Response({
-                'code': 0,
-                'msg': 'success',
-                'data': o
-            }, status=HTTP_200_OK)
+            o = o.values()
+        else:
+            o = o.values(('reg_id', 'name'))
+
+        return Response({
+            'code': 0,
+            'msg': 'success',
+            'data': o
+        }, status=HTTP_200_OK)
 
     # put请求，用来更新对象
     if request.method == 'PUT':
@@ -167,22 +150,26 @@ def set_offset_endpoint(request):
 
     try:
         if request.method == 'POST':
+            if 'https://' in data['server']:
+                data['server'] = data['server'][8:]
+            if 'http://' in data['server']:
+                data['server'] = data['server'][7:]
             model.objects.create(**data)
             status_code = HTTP_201_CREATED
 
         # post请求，用来创建对象
         if request.method == 'PUT':
-            off = model.objects.get(off_id=data['off_id'])
+            off = model.objects.get(reg_id=data['reg_id'])
             # print(off, data)
-            off.code = data['code']
-            off.offset = data['offset']
-            off.max_use_times = data['max_use_times']
-            off.valid_days = data['valid_days']
+            off.name = data['name']
+            off.access_key = data['access_key']
+            off.secret_key = data['secret_key']
+            off.server = data['server']
             off.save()
             status_code = HTTP_200_OK
 
         if request.method == 'DELETE':
-            model.objects.get(off_id=data['off_id']).delete()
+            model.objects.get(reg_id=data['reg_id']).delete()
             status_code = HTTP_200_OK
 
     except Exception as e:
@@ -190,19 +177,21 @@ def set_offset_endpoint(request):
             'code': 3,
             'msg': 'error, %s' % e.args
         }, status=HTTP_400_BAD_REQUEST)
-    else:
-        return Response({
-            'code': 0,
-            'msg': 'success'
-        }, status=status_code)
+
+    return Response({
+        'code': 0,
+        'msg': 'success'
+    }, status=status_code)
 
 
 @api_view(('GET', 'POST', 'DELETE'))
 @verify_body
 def set_buckets_endpoint(request):
+    req_user = request.user
     if request.method == 'GET':
         # 联合查询bucket user profile表
-        obj = Buckets.objects.select_related('user').select_related('user__profile')
+        obj = Buckets.objects.select_related('user').select_related('user__profile').\
+            select_related('bucket_region')
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
             res = obj.filter(user=request.user)
@@ -235,8 +224,6 @@ def set_buckets_endpoint(request):
             }
         })
 
-    req_user = request.user
-
     # 没有进行手机验证的不允许继续操作
     if not req_user.profile.phone_verify or \
             not req_user.profile.access_key or \
@@ -258,25 +245,19 @@ def set_buckets_endpoint(request):
             # ('*duration', int, (verify_max_value, 365 * 5)),
             # 折扣券
             # ('offset_code', str, (verify_length, 8))
+            # ('*bucket_type_id', int, (verify_pk, BucketType)),
+            ('*bucket_region_id', int, (verify_pk, BucketRegion)),
+            ('version_control', bool, verify_true_false),
+            ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated-read'))),
         ]
     # 删除操作仅需提供bucket_id，具体删除是会验证删除者身份与bucket拥有者的身份
     if request.method == 'DELETE':
         fields = [
             ('*bucket_id', int, (verify_pk, Buckets))
         ]
-    # 续期bucket需要提供购买时长 优惠码（可选） bucket_id
-    # if request.method == 'PUT':
-    #     fields = [
-    #         ('*bucket_id', int, (verify_pk, Buckets)),
-    #         # 仅支持最多购买5年
-    #         ('*duration', int, (verify_max_value, 365 * 5)),
-    #         # 折扣券
-    #         ('offset_code', str, (verify_length, 8))
-    #     ]
 
     # 数据过滤与验证
     data = verify_field(request.body, tuple(fields))
-
     if not isinstance(data, dict):
         return Response({
             'code': 1,
@@ -293,110 +274,50 @@ def set_buckets_endpoint(request):
                     'msg': 'the bucket is already exist!'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            # bt = BucketType.objects.get(pk=data['bucket_type_id'])
-            # price = bt.price
-            #
-            # m = Money.objects.get(user=req_user)
-            #
-            # # 默认折扣值为1，即不打拆，也不加价
-            # off_value = 1
-            # off_code = None
-            # if 'offset_code' in data:
-            #     off_code = data['offset_code']
-            #     off_value = get_offset_value(off_code)
-            #     del data['offset_code']
-
-            # 购买容量*每月价*购买月数*折扣优惠
-            # need_money = (data['capacity'] * price * (data['duration'] / 30)) * off_value
-            #
-            # # 判断余额是足购
-            # if m.amount < need_money:
-            #     return Response({
-            #         'code': 2,
-            #         'msg': 'user amount is not enough!',
-            #     })
-
             data['user_id'] = req_user.id
             data['start_time'] = int(time.time())
             data['state'] = 'e'
 
             # 使用用户key创建bucket
-            s3 = init_s3_connection(req_user.profile.access_key, req_user.profile.secret_key)
-            s3.create_bucket(Bucket=data['name'])
+            s3 = s3_client(data['bucket_region_id'], req_user.username)
+            s3.create_bucket(
+                Bucket=data['name'],
+                ACL=data['permission'],
+            )
 
-            # 利用管理员key为新创建的bucket设置配额
-            # rgw = init_rgw_api()
-            # rgw.set_bucket_quota(
-            #     req_user.username,
-            #     bucket=data['name'],
-            #     # max_size_kb=data['capacity'] * 1024 * 1024,
-            #     enabled=True
-            # )
-            # -------- ceph bucket成功创建 ---------
+            if data['version_control']:
+                pass
 
             # 本地数据库插入记录
-            model.objects.create(**data)
-            # 更新优惠码
-            # if off_code:
-            #     update_off_code(off_code)
-            # # 更新用户余额
-            # m.cost(data['capacity'] * price * (data['duration'] / 30))
-            status_code = HTTP_201_CREATED
 
-        # 目前仅支持修改bucket可用时长
-        # if request.method == 'PUT':
-        #     b = model.objects.select_related('bucket_type').get(pk=data['bucket_id'])
-        #     m = Money.objects.get(user=req_user.id)
-        #     # 价格
-        #     price = b.bucket_type.price
-        #     # 用户额
-        #     amount = m.amount
-        #
-        #     off_value = 1
-        #     off_code = None
-        #     if 'offset_code' in data:
-        #         off_code = data['offset_code']
-        #         off_value = get_offset_value(off_code)
-        #         del data['offset_code']
-        #
-        #     # 原始续期空间大小*续期时长（月）*价格*优惠折扣
-        #     need_money = (b.capacity * (data['duration'] / 30) * price) * off_value
-        #     # 余额不足
-        #     if need_money > amount:
-        #         return Response({
-        #             'code': 2,
-        #             'msg': 'user amount is not enough'
-        #         }, status=HTTP_400_BAD_REQUEST)
-        #
-        #     # 更新用户到期时间和开始计费时间
-        #     b.renewal(data['duration'])
-        #     # 更新用户余额
-        #     m.cost(need_money)
-        #     # 更新折扣码，使用次数+1
-        #     if off_code:
-        #         update_off_code(data['offset_code'])
-        #     status_code = HTTP_200_OK
+            bucket_obj = model.objects.create(
+                name=data['name'],
+                bucket_region_id=data['bucket_region_id'],
+                version_control=data['version_control'],
+                user=req_user,
+                start_time=int(time.time()),
+                state='e'
+            )
+
+            BucketAcl.objects.create(
+                permission=data['permission'],
+                user=req_user,
+                bucket_id=bucket_obj.pk
+            )
+            status_code = HTTP_201_CREATED
 
         if request.method == 'DELETE':
             # 即不是超级管理员，也不是bucket拥有者，提示非异操作
-            bucket = model.objects.get(pk=data['bucket_id'])
+            bucket = model.objects.select_related('bucket_region').get(pk=data['bucket_id'])
             if bucket.user != req_user and not req_user.is_superuser:
                 return Response({
                     'code': 2,
                     'msg': 'illegal delete bucket'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            # # 如果bucket未到期，非强制，不能删除，删除后不方便退费
-            # force_delete = request.GET.get('force_delete', False)
-            # if not bucket.check_bucket_expire() and force_delete != 'yes':
-            #     return Response({
-            #         'code': 2,
-            #         'msg': 'bucket is not expire, can not delete'
-            #     }, status=HTTP_400_BAD_REQUEST)
-
             status_code = HTTP_200_OK
             # ceph集群删除bucket
-            rgw = init_rgw_api()
+            rgw = rgw_client(bucket.bucket_region.reg_id)
             rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
             # 删除数据记录
             bucket.delete()
@@ -430,7 +351,7 @@ def get_bucket_detail_endpoint(request):
     req_user = request.user
 
     try:
-        b = Buckets.objects.get(name=bucket_name)
+        b = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
     except:
         b = None
 
@@ -441,7 +362,7 @@ def get_bucket_detail_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     try:
-        rgw = init_rgw_api()
+        rgw = rgw_client(b.bucket_region.reg_id)
         data = rgw.get_bucket(bucket=bucket_name)
     except Exception as e:
         return Response({
@@ -466,15 +387,15 @@ def query_bucket_exist(name):
         return True
 
 
-def get_offset_value(code):
-    try:
-        v = Offset.objects.get(code=code)
-    except:
-        return False
-    else:
-        return v.get_offset_value()
-
-
-def update_off_code(code):
-    v = Offset.objects.get(code=code)
-    v.use_offset_code()
+# def get_offset_value(code):
+#     try:
+#         v = Offset.objects.get(code=code)
+#     except:
+#         return False
+#     else:
+#         return v.get_offset_value()
+#
+#
+# def update_off_code(code):
+#     v = Offset.objects.get(code=code)
+#     v.use_offset_code()

@@ -38,8 +38,7 @@ def verify_field(data: bytes, field: tuple):
 
             if field_name[0] == '*':
                 field_name = field_name[1:]
-
-                if field_name not in data or not data[field_name]:
+                if field_name not in data or (data[field_name] not in (True, False) and isinstance(data[field_name], bool)):
                     return 'field "%s" is necessary, can not be empty' % field_name
 
             if field_name not in data:
@@ -68,7 +67,7 @@ def verify_field(data: bytes, field: tuple):
             if k[0] == '*':
                 k = k[1:]
 
-            if k in data and data[k]:
+            if k in data:
                 if isinstance(data[k], str) and len(data[k]) > 100:
                     data[k] = data[k].strip()[0:100]
                 buff[k] = data[k].strip() if isinstance(data[k], str) else data[k]
@@ -88,7 +87,7 @@ def verify_username(username: str) -> bool:
 
 
 def verify_bucket_name(name: str) -> bool:
-    return True if re.match('^[a-z][a-z0-9_]{1,61}[a-z]$', name) else False
+    return True if re.match('^[a-z0-9][a-z0-9\\-_]{1,62}$', name) else False
 
 
 def verify_length(data: str, length: int) -> bool:

@@ -9,7 +9,7 @@ class Objects(models.Model):
         ('f', 'file'),
         ('d', 'directory')
     )
-    obj_id = models.IntegerField(primary_key=True, auto_created=True)
+    obj_id = models.AutoField(primary_key=True, auto_created=True)
     bucket = models.ForeignKey(Buckets, on_delete=models.CASCADE, null=False, blank=False, related_name='object_bucket')
     name = models.CharField(verbose_name="filename", max_length=1024, blank=False)
     type = models.CharField(verbose_name="file type", max_length=1, choices=FILE_TYPE, blank=False)
@@ -26,3 +26,13 @@ class Objects(models.Model):
         unique_together = (
             'bucket', 'name',  'owner', 'type', 'root'
         )
+
+
+class ObjectAcl(models.Model):
+    acl_oid = models.IntegerField(auto_created=True, primary_key=True)
+    permission = models.CharField(verbose_name="acl name", max_length=50, blank=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
+    object = models.ForeignKey(Objects, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.object.name, self.permission

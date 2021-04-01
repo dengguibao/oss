@@ -9,15 +9,15 @@ from rest_framework.decorators import api_view
 from django.conf import settings
 from django.http.response import Http404
 from django.http import StreamingHttpResponse
-from buckets.models import Buckets
+from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from common.verify import (
     verify_body, verify_object_name,
     verify_field, verify_object_path, verify_bucket_name
 )
-from common.func import init_s3_connection, verify_path, build_tmp_filename, file_iter
+from common.func import verify_path, build_tmp_filename, file_iter, s3_client
 from .serializer import ObjectsSerialize
-from .models import Objects
+from .models import Objects, ObjectAcl
 import hashlib
 import os
 
@@ -40,22 +40,13 @@ def create_directory_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
     # 检验bucket name是否为非法
     try:
-        b = Buckets.objects.get(name=data['bucket_name'])
+        b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
     except:
         b = None
     if not b or req_user.id != b.user_id:
         return Response({
             'code': 2,
             'msg': 'illegal request, error bucket name'
-        })
-
-    # 验证access_key与secret_key
-    access_key = req_user.profile.access_key
-    secret_key = req_user.profile.secret_key
-    if not access_key or not secret_key:
-        return Response({
-            'code': 3,
-            'msg': 'not found access_key or secret_key'
         })
 
     try:
@@ -75,7 +66,7 @@ def create_directory_endpoint(request):
             key = data['folder_name']+'/'
 
         # 初始化s3客户端
-        s3 = init_s3_connection(access_key, secret_key)
+        s3 = s3_client(b.bucket_region.reg_id, req_user.username)
         d = s3.put_object(Bucket=b.name, Body=b'', Key=key)
         # 创建空对象，目录名为空对象
         Objects.objects.create(
@@ -107,7 +98,7 @@ def delete_object_endpoint(request):
     # 验证obj_id是否为非法id
     try:
         obj_id = request.GET.get('obj_id', 0)
-        o = Objects.objects.get(obj_id=int(obj_id))
+        o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=int(obj_id))
     except:
         return Response({
             'code': 1,
@@ -120,11 +111,8 @@ def delete_object_endpoint(request):
             'msg': 'permission denied!'
         }, status=HTTP_403_FORBIDDEN)
 
-    # get access_key secret_key
-    access_key = req_user.profile.access_key
-    secret_key = req_user.profile.secret_key
     try:
-        s3 = init_s3_connection(access_key, secret_key)
+        s3 = s3_client(o.bucket.bucket_region.reg_id, req_user.username)
         delete_list = []
         # 如果删除的对象为目录，则删除该目录下的所有一切对象
         if o.type == 'd':
@@ -222,6 +210,7 @@ def put_object_endpoint(request):
     # filename = request.POST.get('filename', None)
     file = request.FILES.get('file', None)
     path = request.POST.get('path', None)
+    permission = request.POST.get('permission', None)
     # 如果没有文件，则直接响应异常
     if not file or not bucket_name:
         return Response({
@@ -237,17 +226,18 @@ def put_object_endpoint(request):
 
     # 验证bucket是否为异常bucket
     try:
-        b = Buckets.objects.get(user=req_user, name=bucket_name)
+        b = Buckets.objects.select_related('bucket_region').get(user=req_user, name=bucket_name)
     except:
-        err = True
-    else:
-        err = False
-
-    if err:
         return Response({
             'code': 1,
             'msg': 'not found this bucket'
         })
+
+    object_acl = ('private', 'public-read', 'public-read-write', 'authenticated-read')
+
+    if not permission or permission not in object_acl:
+        permission = BucketAcl.objects.get(bucket=b).permission
+
 
     # 验证路程是否为非常路径（目录）
     if path:
@@ -261,7 +251,7 @@ def put_object_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     # 验证文件名是否超长
-    if len(filename) > 63:
+    if len(filename) > 1024:
         return Response({
             'code': 1,
             'msg': 'filename to long'
@@ -275,23 +265,19 @@ def put_object_endpoint(request):
             md5.update(chunk)
             f.write(chunk)
 
-    access_key = req_user.profile.access_key
-    secret_key = req_user.profile.secret_key
-    if not access_key or not secret_key:
-        return Response({
-            'code': 2,
-            'msg': 'not found access_key or secret_key'
-        })
-
     try:
-        s3 = init_s3_connection(access_key, secret_key)
+        s3 = s3_client(b.bucket_region.reg_id, req_user.username)
         if p:
             root = path
         else:
             root = ''
 
         # 利用s3接口进行数据上传至rgw
-        mp = s3.create_multipart_upload(Bucket=b.name, Key=root+filename)
+        mp = s3.create_multipart_upload(
+            Bucket=b.name,
+            Key=root+filename,
+            ACL=permission
+        )
         with open(temp_file, 'rb') as fp:
             n = 1
             parts = []
@@ -321,16 +307,26 @@ def put_object_endpoint(request):
             )
 
         # 创建或更新数据库
-        Objects.objects.update_or_create(
-            name=filename,
-            bucket=b,
-            type='f',
-            root=root,
-            file_size=file.size,
-            key=root+filename,
-            md5=md5.hexdigest(),
-            etag=d['ETag'] if 'ETag' in d else None,
-            owner=req_user
+        insert_data = {
+            'name': filename,
+            'bucket_id': b.bucket_id,
+            'type': 'f',
+            'root': root,
+            'file_size': file.size,
+            'key': root+filename,
+            'md5': md5.hexdigest(),
+            'etag': d['ETag'] if 'ETag' in d else None,
+            'owner_id': req_user.id
+        }
+        if b.version_control:
+            upload_obj = Objects.objects.create(**insert_data)
+        else:
+            upload_obj, create = Objects.objects.update_or_create(**insert_data)
+
+        ObjectAcl.objects.update_or_create(
+            object=upload_obj,
+            permission=permission,
+            user=req_user,
         )
         # 删除临时文件
         os.remove(temp_file)
@@ -353,20 +349,14 @@ def download_object_endpoint(request):
     req_user = request.user
     try:
         obj_id = int(request.GET.get('obj_id', None))
-        obj = Objects.objects.select_related("bucket").get(obj_id=obj_id)
+        obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(obj_id=obj_id)
     except:
         pass
 
     if (obj and obj.owner != req_user) or not obj or obj.type == 'd':
         raise Http404
 
-    access_key = req_user.profile.access_key
-    secret_key = req_user.profile.secret_key
-
-    if not secret_key or not secret_key:
-        raise Http404
-
-    s3 = init_s3_connection(access_key, secret_key)
+    s3 = s3_client(obj.bucket.bucket_region.reg_id, req_user.username)
     tmp = build_tmp_filename()
     with open(tmp, 'wb') as fp:
         s3.download_fileobj(

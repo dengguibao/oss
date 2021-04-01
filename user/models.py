@@ -6,10 +6,11 @@ from django.contrib.auth.models import User
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    phone = models.CharField(max_length=11, blank=False)
+    phone = models.CharField(max_length=11, blank=False, unique=True)
     phone_verify = models.BooleanField(blank=False, default=False)
-    secret_key = models.CharField(max_length=32, blank=True, verbose_name='ceph access key')
-    access_key = models.CharField(max_length=32, blank=True, verbose_name='ceph access secret')
+    ceph_uid = models.CharField(max_length=20, blank=True, verbose_name='ceph uid')
+    secret_key = models.CharField(max_length=50, blank=True, verbose_name='ceph access key')
+    access_key = models.CharField(max_length=50, blank=True, verbose_name='ceph access secret')
     key_type = models.CharField(max_length=5, blank=True)
     parent_uid = models.CharField(max_length=50, verbose_name='parent account username', blank=True)
     is_subuser = models.BooleanField(verbose_name='is sub user', default=False, blank=False)
