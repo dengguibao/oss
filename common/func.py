@@ -43,30 +43,14 @@ def file_iter(filename):
 
 def verify_path(path):
     # 判断用户传过来的路程径是否为真实有效
-    # 利用模型的name和root联合匹配
-    # e.g.
-    #     aaa/bbb/ccc/
-    #     root:aaa/bbb/ sub_dir_name: ccc/
-    # ['aaa', 'bbb', 'ccc', '']
     if not path or path.startswith('/') and not path.endswith('/'):
         return False
     try:
-        obj = Objects.objects.select_related("bucket")
-        a = path.split('/')
-        if len(a) > 2:
-            # ccc/
-            sub_dir_name = a[-2] + '/'
-            del a[-2]
-            # aaa/bbb/
-            root_name = '/'.join(a)
-            return obj.get(name=sub_dir_name, root=root_name, type='d')
-
-        # 只有一层目录则只用查询名称
-        # aaa/  ['aaa', '']
-        if len(a) == 2:
-            return obj.get(name=path, type='d')
+        obj = Objects.objects.select_related("bucket").get(key=path, type='d')
     except:
         return False
+    else:
+        return obj
 
 
 def build_tmp_filename():

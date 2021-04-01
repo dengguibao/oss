@@ -61,9 +61,9 @@ def create_directory_endpoint(request):
     try:
         if 'path' in data:
             # 验证目录是否在正确的bucket下面
-            p = None
             data['path'] = data['path'].replace(',', '/')
             p = verify_path(data['path'])
+
             if not p or p.owner != req_user or p.bucket.name != data['bucket_name']:
                 return Response({
                     'code': 1,
@@ -251,7 +251,7 @@ def put_object_endpoint(request):
 
     # 验证路程是否为非常路径（目录）
     if path:
-        path.replace(',', '/')
+        path = path.replace(',', '/')
         p = verify_path(path)
 
     if p and p.owner != req_user and p.bucket.name != bucket_name:
