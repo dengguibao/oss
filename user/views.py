@@ -310,7 +310,7 @@ def list_user_info_endpoint(request):
     if req_user.is_superuser:
         if username:
             users = User.objects.filter(
-                Q(username=username) |
+                Q(username__contains=username) |
                 Q(profile__parent_uid=username)
             )
         else:
@@ -540,7 +540,7 @@ def query_user_usage(request):
             rgw.get_user(uid=req_user.profile.ceph_uid)
         except:
             continue
-        print(start_time, end_time)
+        print(start_time, end_time, u.profile.ceph_uid)
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,
             start=start_time,
