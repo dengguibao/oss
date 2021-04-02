@@ -68,7 +68,7 @@ class BucketSerialize(ModelSerializer):
             "name", "capacity", "duration",
             "start_time", "state", "user",
             "profile", 'cn_status', 'create_time',
-            'bucket_region', 'permission'
+            'bucket_region', 'permission', 'version_control'
         )
 
         # read_only_fields = (
