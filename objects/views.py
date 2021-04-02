@@ -1,3 +1,5 @@
+import time
+
 from rest_framework.status import (
     HTTP_201_CREATED, HTTP_404_NOT_FOUND,
     HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
@@ -7,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import api_view
 from django.conf import settings
-from django.http.response import Http404
+from rest_framework.exceptions import ParseError
 from django.http import StreamingHttpResponse
 from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
@@ -61,24 +63,41 @@ def create_directory_endpoint(request):
                     'msg': 'path error'
                 }, status=HTTP_400_BAD_REQUEST)
 
-            key = data['path']+data['folder_name']+'/'
+            key = data['path'] + data['folder_name'] + '/'
         else:
-            key = data['folder_name']+'/'
+            key = data['folder_name'] + '/'
 
         # 初始化s3客户端
         s3 = s3_client(b.bucket_region.reg_id, req_user.username)
         d = s3.put_object(Bucket=b.name, Body=b'', Key=key)
         # 创建空对象，目录名为空对象
-        Objects.objects.create(
-            name=data['folder_name']+'/',
-            bucket=b,
-            etag=d['ETag'] if 'ETag' in d else None,
-            version_id=d['VersionId'] if 'VersionId' in d else None,
-            type='d',
-            key=key,
-            root=data['path'] if 'path' in data else None,
-            owner=req_user
-        )
+        record_data = {
+            'name': data['folder_name'] + '/',
+            'bucket': b,
+            'etag': d['ETag'] if 'ETag' in d else None,
+            'version_id': d['VersionId'] if 'VersionId' in d else None,
+            'type': 'd',
+            'key': key,
+            'root': data['path'] if 'path' in data else None,
+            'owner': req_user
+        }
+        Objects.objects.create(**record_data)
+
+        # if b.version_control:
+        #     Objects.objects.create(**record_data)
+        # else:
+        #     Objects.objects.update_or_create(**record_data)
+        # Objects.objects.update_or_create(
+        #     name=data['folder_name'] + '/',
+        #     bucket=b,
+        #     etag=d['ETag'] if 'ETag' in d else None,
+        #     version_id=d['VersionId'] if 'VersionId' in d else None,
+        #     type='d',
+        #     key=key,
+        #     root=data['path'] if 'path' in data else None,
+        #     owner=req_user
+        # )
+
     except Exception as e:
         return Response({
             'code': 4,
@@ -118,7 +137,7 @@ def delete_object_endpoint(request):
         if o.type == 'd':
             root_pth = '' if o.root is None else o.root
             obj_name = o.name
-            key = root_pth+obj_name
+            key = root_pth + obj_name
             delete_list.append(
                 (o.obj_id, o.key)
             )
@@ -238,7 +257,6 @@ def put_object_endpoint(request):
     if not permission or permission not in object_acl:
         permission = BucketAcl.objects.get(bucket=b).permission
 
-
     # 验证路程是否为非常路径（目录）
     p = False
     if path:
@@ -273,24 +291,32 @@ def put_object_endpoint(request):
         else:
             root = ''
 
+        if b.version_control:
+            file_key = root + '%s_%s' % (
+                str(time.time()).replace('.', ''),
+                filename
+            )
+        else:
+            file_key = root+filename
+
         # 利用s3接口进行数据上传至rgw
         mp = s3.create_multipart_upload(
             Bucket=b.name,
-            Key=root+filename,
+            Key=file_key,
             ACL=permission
         )
         with open(temp_file, 'rb') as fp:
             n = 1
             parts = []
             while True:
-                data = fp.read(5*1024**2)
+                data = fp.read(5 * 1024 ** 2)
                 if not data:
                     break
                 x = s3.upload_part(
                     Body=data,
                     Bucket=b.name,
                     ContentLength=len(data),
-                    Key=root+filename,
+                    Key=file_key,
                     UploadId=mp['UploadId'],
                     PartNumber=n
                 )
@@ -302,27 +328,28 @@ def put_object_endpoint(request):
 
             d = s3.complete_multipart_upload(
                 Bucket=b.name,
-                Key=root+filename,
+                Key=file_key,
                 UploadId=mp['UploadId'],
                 MultipartUpload={'Parts': parts}
             )
 
         # 创建或更新数据库
-        insert_data = {
+        record_data = {
             'name': filename,
             'bucket_id': b.bucket_id,
             'type': 'f',
             'root': root,
             'file_size': file.size,
-            'key': root+filename,
+            'key': file_key,
             'md5': md5.hexdigest(),
             'etag': d['ETag'] if 'ETag' in d else None,
+            'version_id': d['VersionId'] if 'VersionId' in d else None,
             'owner_id': req_user.id
         }
         if b.version_control:
-            upload_obj = Objects.objects.create(**insert_data)
+            upload_obj = Objects.objects.create(**record_data)
         else:
-            upload_obj, create = Objects.objects.update_or_create(**insert_data)
+            upload_obj, create = Objects.objects.update_or_create(**record_data)
 
         ObjectAcl.objects.update_or_create(
             object=upload_obj,
@@ -352,13 +379,17 @@ def download_object_endpoint(request):
         obj_id = int(request.GET.get('obj_id', None))
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(obj_id=obj_id)
     except:
-        pass
+        obj = False
 
     if (obj and obj.owner != req_user) or not obj or obj.type == 'd':
-        raise Http404
+        raise ParseError({
+            'detail': 'this file owner is not of you or download object is directory'
+        })
 
     s3 = s3_client(obj.bucket.bucket_region.reg_id, req_user.username)
     tmp = build_tmp_filename()
+
+    print(obj.bucket.name)
     with open(tmp, 'wb') as fp:
         s3.download_fileobj(
             Bucket=obj.bucket.name,

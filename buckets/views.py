@@ -296,7 +296,13 @@ def set_buckets_endpoint(request):
             )
 
             if data['version_control']:
-                pass
+                s3.put_bucket_versioning(
+                    Bucket=data['name'],
+                    VersioningConfiguration={
+                        'MFADelete': 'Disabled',
+                        'Status': 'Enabled',
+                    },
+                )
 
             # 本地数据库插入记录
 
