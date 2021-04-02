@@ -7,7 +7,7 @@ from rest_framework.status import (
     HTTP_200_OK, HTTP_400_BAD_REQUEST,
     HTTP_201_CREATED, HTTP_403_FORBIDDEN,
 )
-
+from django.db.models import Q
 from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
     verify_max_length, verify_body, verify_field, verify_length,
@@ -190,13 +190,22 @@ def set_buckets_endpoint(request):
     req_user = request.user
     if request.method == 'GET':
         # 联合查询bucket user profile表
-        obj = Buckets.objects.select_related('user').select_related('user__profile').\
+        obj = Buckets.objects.select_related('user').select_related('user__profile'). \
             select_related('bucket_region')
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
             res = obj.filter(user=request.user)
         else:
-            res = obj.all()
+            kw = request.GET.get('keyword', None)
+            if kw:
+                res = obj.filter(
+                    Q(user__first_name=kw) |
+                    Q(user__username=kw) |
+                    Q(name__contains=kw) |
+                    Q(bucket_region__name=kw)
+                )
+            else:
+                res = obj.all()
         # 获取分页参数并进行分页
         try:
             cur_page = int(request.GET.get('page', 1))
@@ -248,7 +257,8 @@ def set_buckets_endpoint(request):
             # ('*bucket_type_id', int, (verify_pk, BucketType)),
             ('*bucket_region_id', int, (verify_pk, BucketRegion)),
             ('version_control', bool, verify_true_false),
-            ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated-read'))),
+            ('*permission', str,
+             (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated-read'))),
         ]
     # 删除操作仅需提供bucket_id，具体删除是会验证删除者身份与bucket拥有者的身份
     if request.method == 'DELETE':
@@ -334,7 +344,7 @@ def set_buckets_endpoint(request):
     }, status=status_code)
 
 
-@api_view(('GET', ))
+@api_view(('GET',))
 def query_bucket_name_exist_endpoint(request):
     name = request.GET.get('name', None)
     ret = query_bucket_exist(name)
@@ -385,7 +395,6 @@ def query_bucket_exist(name):
         return False
     else:
         return True
-
 
 # def get_offset_value(code):
 #     try:
