@@ -85,7 +85,6 @@ def s3_client(reg_id: int, username: str):
     try:
         rgw.get_user(uid=u.profile.ceph_uid)
     except:
-
         rgw.create_user(
             uid=u.profile.ceph_uid,
             access_key=u.profile.access_key,
@@ -93,7 +92,6 @@ def s3_client(reg_id: int, username: str):
             display_name=u.first_name,
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
-        print('1111')
     conn = Session(
         aws_access_key_id=u.profile.access_key,
         aws_secret_access_key=u.profile.secret_key
@@ -109,6 +107,21 @@ def s3_client(reg_id: int, username: str):
 def build_ceph_userinfo(username: str) -> tuple:
     x = str(uuid.uuid3(uuid.NAMESPACE_DNS, username)).replace('-', '')
     secret_key = str(uuid.uuid4()).replace('-', '')
-    uid = x[0:8]
-    access_key = x[9:]
+
+    uid = random_build_str(x, 8)
+    access_key = random_build_str(x, 24)
     return uid, access_key, secret_key
+
+
+def random_build_str(origin_str: str, uid_len: int) -> str:
+    if len(origin_str) < 32:
+        return str(uuid.uuid1()).replace('-', '')[:uid_len]
+    data = []
+    for i in range(uid_len):
+        x = random.randint(0, 31)
+        if x < 15:
+            data.append(origin_str[x].upper())
+        else:
+            data.append(origin_str[x])
+
+    return ''.join(data)

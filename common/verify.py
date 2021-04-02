@@ -87,7 +87,7 @@ def verify_username(username: str) -> bool:
 
 
 def verify_bucket_name(name: str) -> bool:
-    return True if re.match('^[a-z0-9][a-z0-9\\-_]{1,62}$', name) else False
+    return True if re.match('^[a-z0-9][a-z0-9\\-]{1,62}$', name) else False
 
 
 def verify_length(data: str, length: int) -> bool:

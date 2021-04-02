@@ -326,7 +326,7 @@ def set_buckets_endpoint(request):
         return Response({
             'code': 3,
             'msg': 'error, %s' % str(e)
-        })
+        }, status=HTTP_400_BAD_REQUEST)
 
     return Response({
         'code': 0,

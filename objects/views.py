@@ -240,6 +240,7 @@ def put_object_endpoint(request):
 
 
     # 验证路程是否为非常路径（目录）
+    p = False
     if path:
         path = path.replace(',', '/')
         p = verify_path(path)

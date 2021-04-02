@@ -9,11 +9,15 @@ class Profile(models.Model):
     phone = models.CharField(max_length=11, blank=False, unique=True)
     phone_verify = models.BooleanField(blank=False, default=False)
     ceph_uid = models.CharField(max_length=20, blank=True, verbose_name='ceph uid')
-    secret_key = models.CharField(max_length=50, blank=True, verbose_name='ceph access key')
-    access_key = models.CharField(max_length=50, blank=True, verbose_name='ceph access secret')
+    secret_key = models.CharField(max_length=50, blank=True, default=None, null=True, unique=True, verbose_name='ceph access key')
+    access_key = models.CharField(max_length=50, blank=True, default=None, null=True, unique=True, verbose_name='ceph access secret')
     key_type = models.CharField(max_length=5, blank=True)
-    parent_uid = models.CharField(max_length=50, verbose_name='parent account username', blank=True)
+    parent_uid = models.CharField(max_length=50, verbose_name='sub account parent account username', blank=True)
     is_subuser = models.BooleanField(verbose_name='is sub user', default=False, blank=False)
+
+
+    def __str__(self):
+        return f'user profile: {self.user.username}, {self.user.first_name}'
 
 
 # @receiver(post_save, sender=User)

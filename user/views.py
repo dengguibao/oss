@@ -266,7 +266,7 @@ def user_delete_endpoint(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     try:
-        u = User.objects.select_related('profile').get(pk=data['user_id'])
+        u = User.objects.get(pk=data['user_id'])
     except:
         return Response({
             'code': 1,
@@ -425,19 +425,23 @@ def verify_user_phone_endpoint(request):
 
     user = request.user
 
-    if user.profile.phone != data['phone']:
+    if user.profile.phone != data['phone'] or user.profile.phone_verify:
         return Response({
             'code': 1,
-            'msg': 'phone error!',
+            'msg': 'phone number error or that user is already verification',
         }, status=HTTP_400_BAD_REQUEST)
     uid, access_key, secret_key = build_ceph_userinfo(user.username)
-    Profile.objects.get(user=user).update(
-        phone_verify=True,
-        access_key=access_key,
-        secret_key=secret_key,
-        ceph_uid=uid
+    # print(uid,access_key,secret_key)
+    p = Profile.objects.get(user=user)
+    p.__dict__.update(
+        **{
+            'phone_verify': True,
+            'access_key': access_key,
+            'secret_key': secret_key,
+            'ceph_uid': uid
+        }
     )
-
+    p.save()
     return Response({
         'code': 0,
         'msg': 'success',
