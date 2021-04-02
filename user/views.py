@@ -527,7 +527,7 @@ def query_user_usage(request):
         }, status=HTTP_400_BAD_REQUEST)
 
     if not start_time or not check_date_format(start_time):
-        start_time = time.strftime(fmt, time.localtime())
+        start_time = time.strftime(fmt, time.localtime(time.time()-86400))
 
     if not end_time or not check_date_format(end_time):
         end_time = time.strftime(fmt, time.localtime())
@@ -540,9 +540,9 @@ def query_user_usage(request):
             rgw.get_user(uid=req_user.profile.ceph_uid)
         except:
             continue
-
+        print(start_time, end_time)
         data = rgw.get_usage(
-            uid=username,
+            uid=u.profile.ceph_uid,
             start=start_time,
             end=end_time,
             show_summary=True,

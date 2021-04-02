@@ -32,6 +32,7 @@ class BucketSerialize(ModelSerializer):
     profile = ProfileSerialize(read_only=True)
     cn_status = SerializerMethodField()
     bucket_region = BucketRegionSerialize(read_only=True)
+    permission = SerializerMethodField()
 
     def get_cn_status(self, obj):
         if obj.state == 'e':
@@ -42,13 +43,32 @@ class BucketSerialize(ModelSerializer):
             return '暂停'
         return ''
 
+    def bucket_all_permission(self):
+        return BucketAcl.objects.all()
+
+    def get_permission(self, obj):
+        all_perm = self.bucket_all_permission()
+        acl = 'private'
+        for i in all_perm:
+            if i.bucket_id == obj.bucket_id:
+                alc = i.permission
+                break
+
+        data = {
+            'private': '私有',
+            'public-read': '公开读',
+            'public-read-write': '公开读写',
+            'authenticated-read': '认证读'
+        }
+        return data[acl] if acl in data else 'unknow'
+
     class Meta:
         model = Buckets
         fields = (
             "name", "capacity", "duration",
             "start_time", "state", "user",
             "profile", 'cn_status', 'create_time',
-            'bucket_region'
+            'bucket_region', 'permission'
         )
 
         # read_only_fields = (
