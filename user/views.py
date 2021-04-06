@@ -20,6 +20,7 @@ from common.verify import (
 from common.func import build_ceph_userinfo, rgw_client, get_client_ip
 from .serializer import UserSerialize
 from .models import Profile, Money
+from rgwadmin.exceptions import NoSuchUser
 
 import time
 
@@ -243,7 +244,7 @@ def user_delete_endpoint(request):
             rgw = rgw_client(i.reg_id)
             try:
                 rgw.get_user(uid=u.profile.ceph_uid, stats=True)
-            except:
+            except NoSuchUser:
                 continue
             else:
                 rgw.remove_user(uid=u.profile.ceph_uid, purge_data=True)
@@ -282,7 +283,7 @@ def list_user_info_endpoint(request):
     try:
         cur_page = int(request.GET.get('page', 1))
         size = int(request.GET.get('size', settings.PAGE_SIZE))
-    except ValueError as e:
+    except ValueError:
         cur_page = 1
         size = settings.PAGE_SIZE
 
@@ -318,7 +319,7 @@ def get_user_detail_endpoint(request, user_id):
     :param user_id:
     :return:
     """
-    u = User.objects.get(pk=user_id)
+    # u = User.objects.get(pk=user_id)
 
     try:
         u = User.objects.get(pk=user_id)
@@ -455,7 +456,7 @@ def query_user_usage(request):
     u = False
     try:
         u = User.objects.get(username=username)
-    except:
+    except User.DoesNotExist:
         pass
 
     if not u or (u != req_user and not req_user.is_superuser):
@@ -473,7 +474,7 @@ def query_user_usage(request):
         rgw = rgw_client(i.reg_id)
         try:
             rgw.get_user(uid=req_user.profile.ceph_uid)
-        except:
+        except NoSuchUser:
             continue
         # print(start_time, end_time, u.profile.ceph_uid)
         data = rgw.get_usage(

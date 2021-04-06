@@ -38,7 +38,7 @@ def create_directory_endpoint(request):
     # 检验bucket name是否为非法
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
-    except:
+    except Buckets.DoesNotExist:
         raise NotFound(detail='not fount this bucket')
 
     bucket_acl = b.bucket_acl.get().permission
@@ -110,7 +110,7 @@ def delete_object_endpoint(request):
     try:
         obj_id = request.GET.get('obj_id', 0)
         o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=int(obj_id))
-    except:
+    except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
     object_acl = o.object_acl.get().permission
@@ -226,7 +226,7 @@ def put_object_endpoint(request):
     # 验证bucket是否为异常bucket
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
-    except:
+    except Buckets.DoesNotExist:
         raise NotFound(detail='not found this bucket')
 
     bucket_acl = b.bucket_acl.get().permission

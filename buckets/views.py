@@ -57,18 +57,15 @@ def set_bucket_type_endpoint(request):
     try:
         if request.method == 'POST':
             model.objects.create(**data)
-            status_code = HTTP_201_CREATED
 
         if request.method == 'PUT':
             bt = model.objects.get(bucket_type_id=data['bucket_type_id'])
             bt.name = data['name']
             bt.price = data['price']
             bt.save()
-            status_code = HTTP_200_OK
 
         if request.method == 'DELETE':
             model.objects.get(bucket_type_id=data['bucket_type_id']).delete()
-            status_code = HTTP_200_OK
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -76,7 +73,7 @@ def set_bucket_type_endpoint(request):
         return Response({
             'code': 0,
             'msg': 'success'
-        }, status=status_code)
+        }, status=HTTP_201_CREATED if request.method == 'POST' else HTTP_200_OK)
 
 
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
@@ -125,7 +122,7 @@ def set_bucket_region_endpoint(request):
     if request.method in ('POST', 'PUT', 'DELETE'):
         data = verify_field(request.body, tuple(fields))
         if not isinstance(data, dict):
-            raise ParseError(data=data)
+            raise ParseError(detail=data)
 
         if not request.user.is_superuser:
             raise NotAuthenticated(detail='permission denied!')
@@ -137,7 +134,6 @@ def set_bucket_region_endpoint(request):
             if 'http://' in data['server']:
                 data['server'] = data['server'][7:]
             model.objects.create(**data)
-            status_code = HTTP_201_CREATED
 
         # post请求，用来创建对象
         if request.method == 'PUT':
@@ -148,11 +144,9 @@ def set_bucket_region_endpoint(request):
             off.secret_key = data['secret_key']
             off.server = data['server']
             off.save()
-            status_code = HTTP_200_OK
 
         if request.method == 'DELETE':
             model.objects.get(reg_id=data['reg_id']).delete()
-            status_code = HTTP_200_OK
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -160,7 +154,7 @@ def set_bucket_region_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success'
-    }, status=status_code)
+    }, status=HTTP_201_CREATED if request.method == 'POST' else HTTP_200_OK)
 
 
 @api_view(('GET', 'POST', 'DELETE'))
@@ -290,7 +284,6 @@ def set_buckets_endpoint(request):
                 user=req_user,
                 bucket_id=bucket_obj.pk
             )
-            status_code = HTTP_201_CREATED
 
         if request.method == 'DELETE':
             # 即不是超级管理员，也不是bucket拥有者，提示非异操作
@@ -298,7 +291,6 @@ def set_buckets_endpoint(request):
             if bucket.user != req_user and not req_user.is_superuser:
                 raise ParseError(detail='illegal delete bucket')
 
-            status_code = HTTP_200_OK
             # ceph集群删除bucket
             rgw = rgw_client(bucket.bucket_region.reg_id)
             rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
@@ -311,7 +303,7 @@ def set_buckets_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success'
-    }, status=status_code)
+    }, status=HTTP_201_CREATED if request.method == 'POST' else HTTP_200_OK)
 
 
 @api_view(('GET',))
@@ -332,11 +324,11 @@ def get_bucket_detail_endpoint(request):
 
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
-    except:
-        b = None
+    except Buckets.DoesNotExist:
+        raise NotFound(detail='not found this bucket')
 
-    if not b or b.user != req_user or not req_user.is_superuser:
-        raise NotFound(detail='not found this bucket or this bucket is not own you')
+    if b.user != req_user or not req_user.is_superuser:
+        raise ParseError(detail='this bucket is not own you')
 
     try:
         rgw = rgw_client(b.bucket_region.reg_id)
@@ -354,7 +346,7 @@ def get_bucket_detail_endpoint(request):
 def query_bucket_exist(name):
     try:
         Buckets.objects.get(name=name)
-    except:
+    except Buckets.DoesNotExist:
         return False
     else:
         return True
