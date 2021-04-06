@@ -135,12 +135,20 @@ REST_FRAMEWORK = {
     )
 }
 
-RGW_API_KEY = {
-    # access_key, secret_key, server
-    'NORMAL': ('J2UTA0L5Y9LFGT2I6J9V', '7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek', '10.10.0.211:7480')
+# RGW_API_KEY = {
+#     # access_key, secret_key, server
+#     'NORMAL': ('J2UTA0L5Y9LFGT2I6J9V', '7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek', '10.10.0.211:7480')
+# }
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': '127.0.0.1:11211',
+        'TIMEOUT': 900,
+    }
 }
 
-TOKEN_EXPIRE_TIME = 7200
+TOKEN_EXPIRE_TIME = 900
 PAGE_SIZE = 10
 
 CORS_ALLOW_CREDENTIALS = True

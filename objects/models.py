@@ -22,6 +22,9 @@ class Objects(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True, related_name="object_owner")
     upload_time = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f'{self.obj_id}, {self.name}, {self.key}'
+
     class Meta:
         unique_together = (
             'bucket', 'owner', 'key', 'version_id'
@@ -32,7 +35,7 @@ class ObjectAcl(models.Model):
     acl_oid = models.IntegerField(auto_created=True, primary_key=True)
     permission = models.CharField(verbose_name="acl name", max_length=50, blank=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
-    object = models.ForeignKey(Objects, on_delete=models.CASCADE)
+    object = models.ForeignKey(Objects, on_delete=models.CASCADE, related_name='object_acl')
 
     def __str__(self):
-        return self.object.name, self.permission
+        return f'{self.object.name}, {self.permission}'

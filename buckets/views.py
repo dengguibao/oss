@@ -1,12 +1,9 @@
 from django.conf import settings
-
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.status import (
-    HTTP_200_OK, HTTP_400_BAD_REQUEST,
-    HTTP_201_CREATED, HTTP_403_FORBIDDEN,
-)
+from rest_framework.status import HTTP_201_CREATED, HTTP_200_OK
+from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
 from django.db.models import Q
 from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
@@ -40,7 +37,7 @@ def set_bucket_type_endpoint(request):
             'code': 1,
             'msg': 'success',
             'data': result
-        }, status=HTTP_200_OK)
+        })
 
     if request.method == 'PUT':
         fields.append(id_field[0])
@@ -52,16 +49,10 @@ def set_bucket_type_endpoint(request):
     if request.method in ('POST', 'PUT', 'DELETE'):
         data = verify_field(request.body, tuple(fields))
         if not isinstance(data, dict):
-            return Response({
-                'code': 1,
-                'msg': data
-            }, status=HTTP_400_BAD_REQUEST)
+            raise ParseError(detail=data)
 
         if not request.user.is_superuser:
-            return Response({
-                'code': 2,
-                'msg': 'permission deinied!'
-            }, status=HTTP_403_FORBIDDEN)
+            return NotAuthenticated(detail='permission denied!')
 
     try:
         if request.method == 'POST':
@@ -80,10 +71,7 @@ def set_bucket_type_endpoint(request):
             status_code = HTTP_200_OK
 
     except Exception as e:
-        return Response({
-            'code': 3,
-            'msg': 'error, %s' % e.args
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=str(e))
     else:
         return Response({
             'code': 0,
@@ -123,7 +111,7 @@ def set_bucket_region_endpoint(request):
             'code': 0,
             'msg': 'success',
             'data': o
-        }, status=HTTP_200_OK)
+        })
 
     # put请求，用来更新对象
     if request.method == 'PUT':
@@ -137,16 +125,10 @@ def set_bucket_region_endpoint(request):
     if request.method in ('POST', 'PUT', 'DELETE'):
         data = verify_field(request.body, tuple(fields))
         if not isinstance(data, dict):
-            return Response({
-                'code': 1,
-                'msg': data
-            }, status=HTTP_400_BAD_REQUEST)
+            raise ParseError(data=data)
 
         if not request.user.is_superuser:
-            return Response({
-                'code': 2,
-                'msg': 'permission deinied!'
-            }, status=HTTP_403_FORBIDDEN)
+            raise NotAuthenticated(detail='permission denied!')
 
     try:
         if request.method == 'POST':
@@ -173,10 +155,7 @@ def set_bucket_region_endpoint(request):
             status_code = HTTP_200_OK
 
     except Exception as e:
-        return Response({
-            'code': 3,
-            'msg': 'error, %s' % e.args
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -210,7 +189,7 @@ def set_buckets_endpoint(request):
         try:
             cur_page = int(request.GET.get('page', 1))
             page_size = int(request.GET.get('size', settings.PAGE_SIZE))
-        except:
+        except ValueError:
             cur_page = 1
             page_size = settings.PAGE_SIZE
 
@@ -237,10 +216,7 @@ def set_buckets_endpoint(request):
     if not req_user.profile.phone_verify or \
             not req_user.profile.access_key or \
             not req_user.profile.secret_key:
-        return Response({
-            'code': 1,
-            'msg': 'current user has not pass phone verification '
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='current user has not pass phone verification')
 
     model = Buckets
     # 新增bucket需要提供的字段以及验证方法
@@ -269,20 +245,14 @@ def set_buckets_endpoint(request):
     # 数据过滤与验证
     data = verify_field(request.body, tuple(fields))
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
 
     # 开始进行业务逻辑处理
     try:
         # 创建bucket
         if request.method == 'POST':
             if query_bucket_exist(data['name']):
-                return Response({
-                    'code': 2,
-                    'msg': 'the bucket is already exist!'
-                }, status=HTTP_400_BAD_REQUEST)
+                raise ParseError(detail='the bucket is already exist!')
 
             data['user_id'] = req_user.id
             data['start_time'] = int(time.time())
@@ -326,10 +296,7 @@ def set_buckets_endpoint(request):
             # 即不是超级管理员，也不是bucket拥有者，提示非异操作
             bucket = model.objects.select_related('bucket_region').get(pk=data['bucket_id'])
             if bucket.user != req_user and not req_user.is_superuser:
-                return Response({
-                    'code': 2,
-                    'msg': 'illegal delete bucket'
-                }, status=HTTP_400_BAD_REQUEST)
+                raise ParseError(detail='illegal delete bucket')
 
             status_code = HTTP_200_OK
             # ceph集群删除bucket
@@ -339,10 +306,7 @@ def set_buckets_endpoint(request):
             bucket.delete()
 
     except Exception as e:
-        return Response({
-            'code': 3,
-            'msg': 'error, %s' % str(e)
-        }, status=HTTP_400_BAD_REQUEST)
+        return ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -372,20 +336,13 @@ def get_bucket_detail_endpoint(request):
         b = None
 
     if not b or b.user != req_user or not req_user.is_superuser:
-        return Response({
-            'code': 1,
-            'msg': 'not found this bucket'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise NotFound(detail='not found this bucket or this bucket is not own you')
 
     try:
         rgw = rgw_client(b.bucket_region.reg_id)
         data = rgw.get_bucket(bucket=bucket_name)
     except Exception as e:
-        return Response({
-            'code': 1,
-            'msg': 'get bucket detail failed',
-            'error': str(e)
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,

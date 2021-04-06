@@ -1,25 +1,23 @@
-from rest_framework.status import (
-    HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_201_CREATED,
-    HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
-)
+from rest_framework.status import HTTP_201_CREATED
+from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
-
 from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
 from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
+from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
 from common.verify import (
     verify_field, verify_mail, verify_username,
     verify_phone, verify_body, verify_length,
     verify_max_length, verify_max_value
 )
-from common.func import build_ceph_userinfo, rgw_client
+from common.func import build_ceph_userinfo, rgw_client, get_client_ip
 from .serializer import UserSerialize
 from .models import Profile, Money
 
@@ -40,7 +38,7 @@ def create_user_endpoint(request):
     is_subuser = request.GET.get('is_subuser', 0)
     try:
         is_subuser = int(is_subuser)
-    except:
+    except ValueError:
         is_subuser = 0
     else:
         is_subuser = True if is_subuser == 1 else False
@@ -48,16 +46,10 @@ def create_user_endpoint(request):
     req_user = request.user
 
     if is_subuser and isinstance(req_user, AnonymousUser):
-        return Response({
-            'code': 1,
-            'msg': 'illegal request, create sub user need a already user'
-        })
+        raise ParseError(detail='create sub user need a already exist user')
 
     if not isinstance(req_user, AnonymousUser) and req_user.profile.is_subuser:
-        return Response({
-            'code': 1,
-            'msg': 'illegal request, only normal can be create sub user'
-        })
+        raise ParseError(detail='illegal request, only normal can be create sub user')
 
     fields = (
         ('*username', str, verify_username),
@@ -71,10 +63,7 @@ def create_user_endpoint(request):
     data = verify_field(request.body, fields)
 
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data,
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
 
     # if data['pwd1'] != data['pwd2']:
     #     return Response({
@@ -84,13 +73,10 @@ def create_user_endpoint(request):
 
     try:
         User.objects.get(username=data['username'])
-    except:
+    except User.DoesNotExist:
         pass
     else:
-        return Response({
-            'code': 1,
-            'msg': 'user already exist!'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='the user is already exist')
 
     try:
         user = User.objects.create_user(
@@ -116,10 +102,7 @@ def create_user_endpoint(request):
             )
         Token.objects.create(user=user)
     except Exception as e:
-        return Response({
-            'code': 1,
-            'msg': e.args[1] if len(e.args) > 1 else str(e.args)
-        }, status=HTTP_400_BAD_REQUEST)
+        return ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -142,28 +125,23 @@ def user_login_endpoint(request):
 
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        }, status=HTTP_404_NOT_FOUND)
+        raise ParseError(detail=data)
 
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
-        return Response({
-            'code': 1,
-            'msg': 'username or password is wrong!'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='username or password has wrong!')
 
-    token, create = Token.objects.get_or_create(user=user)
+    try:
+        Token.objects.get(user=user).delete()
+    except Token.DoesNotExist:
+        pass
+
+    token, create = Token.objects.update_or_create(user=user)
+    cache_request_user_meta_info(token, request)
+    # 使用django login方法登陆，不然没有登陆记录，但是不需要任何session
     login(request, user=user)
     request.session.clear()
     logout(request)
-
-    if not create:
-        token_create_ts = token.created.timestamp()
-        if time.time() - token_create_ts > settings.TOKEN_EXPIRE_TIME:
-            token.delete()
-            token = Token.objects.create(user=user)
 
     return Response({
         'code': 0,
@@ -176,7 +154,7 @@ def user_login_endpoint(request):
             'phone_number': user.profile.phone,
             'user_type': 'superuser' if user.is_superuser else 'normal',
         }
-    }, status=HTTP_200_OK)
+    })
 
 
 @api_view(('POST',))
@@ -204,32 +182,23 @@ def change_password_endpoint(request):
     data = verify_field(request.body, tuple(fields))
 
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
 
     if data['pwd1'] != data['pwd2']:
-        return Response({
-            'code': 1,
-            'msg': 'the old and new password is not match!'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='the old and new password is not match!')
 
     user = None
     if request.user.is_superuser:
         try:
             user = User.objects.get(username=data['username'])
-        except:
+        except User.DoesNotExist:
             pass
     else:
         user = authenticate(username=data['username'], password=data['old_pwd'])
         # user = User.objects.get(username='te2st')
 
     if user and user.username != data['username']:
-        return Response({
-            'code': 1,
-            'msg': 'error username!'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='error username!')
 
     user.set_password(data['pwd1'])
     user.save()
@@ -237,7 +206,7 @@ def change_password_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success'
-    }, status=HTTP_200_OK)
+    })
 
 
 @api_view(('DELETE',))
@@ -249,10 +218,7 @@ def user_delete_endpoint(request):
     :return:
     """
     if not request.user.is_superuser:
-        return Response({
-            'code': 1,
-            'msg': 'permission denied!'
-        }, status=HTTP_403_FORBIDDEN)
+        raise NotAuthenticated(detail='permission denied!')
 
     fields = (
         ('*username', str, verify_username),
@@ -260,24 +226,15 @@ def user_delete_endpoint(request):
     )
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
 
     try:
         u = User.objects.get(pk=data['user_id'])
-    except:
-        return Response({
-            'code': 1,
-            'msg': 'not found this user'
-        }, status=HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        raise NotFound(detail='not found this user')
     else:
         if u.username != data['username']:
-            return Response({
-                'code': 1,
-                'msg': 'error username'
-            }, status=HTTP_400_BAD_REQUEST)
+            raise ParseError(detail='username and user_id not match')
 
     if u.profile.phone_verify:
         region = BucketRegion.objects.all()
@@ -294,7 +251,7 @@ def user_delete_endpoint(request):
     return Response({
         'code': 1,
         'msg': 'success'
-    }, status=HTTP_200_OK)
+    })
 
 
 @api_view(('GET',))
@@ -325,7 +282,7 @@ def list_user_info_endpoint(request):
     try:
         cur_page = int(request.GET.get('page', 1))
         size = int(request.GET.get('size', settings.PAGE_SIZE))
-    except:
+    except ValueError as e:
         cur_page = 1
         size = settings.PAGE_SIZE
 
@@ -349,7 +306,7 @@ def list_user_info_endpoint(request):
             'page_size': size,
             'current_page': page.page.number
         }
-    }, status=HTTP_200_OK)
+    })
 
 
 @api_view(('GET',))
@@ -368,23 +325,15 @@ def get_user_detail_endpoint(request, user_id):
         p = Profile.objects.get(user=u)
         m = Money.objects.get(user=u)
         b = Buckets.objects.filter(user=u)
-
-
-    except:
-        return Response({
-            'code': 1,
-            'msg': 'error user id'
-        }, status=HTTP_400_BAD_REQUEST)
+    except Profile.DoesNotExist:
+        raise ParseError(detail='user_id has wrong!')
 
     req_username = request.user.username
 
     if not request.user.is_superuser and \
             u.username != req_username and \
             u.profile.parent_uid != req_username:
-        return Response({
-            'code': 1,
-            'msg': 'permission denied'
-        }, status=HTTP_403_FORBIDDEN)
+        raise NotAuthenticated(detail='permission denied!')
 
     u_d = model_to_dict(u)
     p_d = model_to_dict(p)
@@ -418,18 +367,13 @@ def verify_user_phone_endpoint(request):
     )
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data,
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
 
     user = request.user
 
     if user.profile.phone != data['phone'] or user.profile.phone_verify:
-        return Response({
-            'code': 1,
-            'msg': 'phone number error or that user is already verification',
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='phone number error or that user is already verification')
+
     uid, access_key, secret_key = build_ceph_userinfo(user.username)
     # print(uid,access_key,secret_key)
     p = Profile.objects.get(user=user)
@@ -445,7 +389,7 @@ def verify_user_phone_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success',
-    }, status=HTTP_200_OK)
+    })
 
 
 @api_view(('POST',))
@@ -458,10 +402,7 @@ def user_charge_endpoint(request):
     """
     req_user = request.user
     if req_user.profile.is_subuser:
-        return Response({
-            'code': 1,
-            'msg': 'sub user can not charge'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise NotAuthenticated(detail='sub user can not charge')
 
     fields = (
         ('*order_id', str, (verify_length, 10)),
@@ -470,10 +411,7 @@ def user_charge_endpoint(request):
     data = verify_field(request.body, fields)
 
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        })
+        raise ParseError(detail=data)
 
     user_money = Money.objects.get(user=req_user)
     user_money.charge(data['money'])
@@ -492,7 +430,7 @@ def query_user_exist_endpoint(request):
     username = request.GET.get('username', None)
     try:
         User.objects.get(username=username)
-    except:
+    except User.DoesNotExist:
         exist = False
     else:
         exist = True
@@ -521,10 +459,7 @@ def query_user_usage(request):
         pass
 
     if not u or (u != req_user and not req_user.is_superuser):
-        return Response({
-            'code': 1,
-            'msg': 'not found this user'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise NotFound(detail='not fount this user')
 
     if not start_time or not check_date_format(start_time):
         start_time = time.strftime(fmt, time.localtime(time.time()-86400))
@@ -540,7 +475,7 @@ def query_user_usage(request):
             rgw.get_user(uid=req_user.profile.ceph_uid)
         except:
             continue
-        print(start_time, end_time, u.profile.ceph_uid)
+        # print(start_time, end_time, u.profile.ceph_uid)
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,
             start=start_time,
@@ -568,14 +503,28 @@ def __GRANT_SUPERUSER_ENDPOINT__(request):
     u.save()
     return Response({
         'msg': 'success'
-    }, status=HTTP_200_OK)
+    })
 
 
 def check_date_format(s: str) -> bool:
     try:
         fmt = '%Y-%m-%d'
         time.strptime(s, fmt)
-    except Exception as e:
+    except ValueError:
         return False
 
     return True
+
+
+def cache_request_user_meta_info(token_key, request):
+    """
+    将请求用户的ip地址、ua、最新使用时间，结合中token key写入缓存
+    用户登陆时，使用cache中的信息校验
+    """
+    ua = request.META.get('HTTP_USER_AGENT', 'unknown')
+    remote_ip = get_client_ip(request)
+    user = Token.objects.get(key=token_key).user
+
+    # write token extra info to cache
+    cache.set('token_%s' % token_key, (ua, remote_ip, time.time(), user))
+    # print(cache.get('token_%s' % token_key))

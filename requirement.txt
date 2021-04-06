@@ -8,7 +8,9 @@ django-cors-headers==3.7.0
 djangorestframework==3.12.2
 idna==2.10
 jmespath==0.10.0
+pylibmc==1.6.1
 python-dateutil==2.8.1
+python-memcached==1.59
 pytz==2021.1
 requests==2.25.1
 requests-aws==0.1.8

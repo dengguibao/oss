@@ -125,3 +125,11 @@ def random_build_str(origin_str: str, uid_len: int) -> str:
             data.append(origin_str[x])
 
     return ''.join(data)
+
+
+def get_client_ip(request):
+    try:
+        remote_ip = request.META['HTTP_X_FORWARDED_FOR'].split(',')[0]
+    except KeyError:
+        remote_ip = request.META.get('REMOTE_ADDR', None)
+    return remote_ip

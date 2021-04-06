@@ -51,7 +51,7 @@ class BucketSerialize(ModelSerializer):
         acl = 'private'
         for i in all_perm:
             if i.bucket_id == obj.bucket_id:
-                alc = i.permission
+                acl = i.permission
                 break
 
         data = {

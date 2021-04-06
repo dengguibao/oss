@@ -1,16 +1,13 @@
 import time
-
-from rest_framework.status import (
-    HTTP_201_CREATED, HTTP_404_NOT_FOUND,
-    HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN
-)
-from rest_framework.exceptions import ParseError
+from rest_framework.permissions import AllowAny
+from rest_framework.status import HTTP_201_CREATED
+from rest_framework.exceptions import ParseError, NotAuthenticated, NotFound
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from django.conf import settings
-from rest_framework.exceptions import ParseError
 from django.http import StreamingHttpResponse
+from django.contrib.auth.models import AnonymousUser
 from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from common.verify import (
@@ -25,6 +22,7 @@ import os
 
 
 @api_view(('POST',))
+@permission_classes((AllowAny,))
 @verify_body
 def create_directory_endpoint(request):
     req_user = request.user
@@ -36,20 +34,20 @@ def create_directory_endpoint(request):
     # 检验字段
     data = verify_field(request.body, _fields)
     if not isinstance(data, dict):
-        return Response({
-            'code': 1,
-            'msg': data
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=data)
     # 检验bucket name是否为非法
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
     except:
-        b = None
-    if not b or req_user.id != b.user_id:
-        return Response({
-            'code': 2,
-            'msg': 'illegal request, error bucket name'
-        })
+        raise NotFound(detail='not fount this bucket')
+
+    bucket_acl = b.bucket_acl.get().permission
+
+    if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
+        raise NotAuthenticated(detail='this bucket access policy is not public read write')
+
+    if bucket_acl != 'public-read-write' and req_user.id != b.user_id:
+        raise ParseError(detail='bucket resource not match')
 
     try:
         if 'path' in data:
@@ -58,10 +56,7 @@ def create_directory_endpoint(request):
             p = verify_path(data['path'])
 
             if not p or p.owner != req_user or p.bucket.name != data['bucket_name']:
-                return Response({
-                    'code': 1,
-                    'msg': 'path error'
-                }, status=HTTP_400_BAD_REQUEST)
+                raise ParseError(detail='illegal path')
 
             key = data['path'] + data['folder_name'] + '/'
         else:
@@ -99,11 +94,7 @@ def create_directory_endpoint(request):
         # )
 
     except Exception as e:
-        return Response({
-            'code': 4,
-            'msg': 'create folder failed',
-            'error': '%s' % str(e)
-        })
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -112,6 +103,7 @@ def create_directory_endpoint(request):
 
 
 @api_view(('DELETE',))
+@permission_classes((AllowAny,))
 def delete_object_endpoint(request):
     req_user = request.user
     # 验证obj_id是否为非法id
@@ -119,16 +111,13 @@ def delete_object_endpoint(request):
         obj_id = request.GET.get('obj_id', 0)
         o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=int(obj_id))
     except:
-        return Response({
-            'code': 1,
-            'msg': 'not found this object resource'
-        }, status=HTTP_404_NOT_FOUND)
+        raise NotFound(detail='not found this object resource')
 
-    if o.owner != req_user:
-        return Response({
-            'code': 1,
-            'msg': 'permission denied!'
-        }, status=HTTP_403_FORBIDDEN)
+    object_acl = o.object_acl.get().permission
+
+    if (isinstance(req_user, AnonymousUser) and object_acl != 'public-read-write') or \
+            object_acl != 'public-read-write' and o.owner != req_user:
+        raise NotAuthenticated(detail='permission denied')
 
     try:
         s3 = s3_client(o.bucket.bucket_region.reg_id, req_user.username)
@@ -160,11 +149,7 @@ def delete_object_endpoint(request):
             Objects.objects.get(obj_id=del_id).delete()
 
     except Exception as e:
-        return Response({
-            'code': 3,
-            'msg': 'delete object failed',
-            'error': '%s' % str(e)
-        })
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -173,21 +158,22 @@ def delete_object_endpoint(request):
 
 
 @api_view(('GET',))
+@permission_classes((AllowAny,))
 def list_objects_endpoint(request):
+
     req_user = request.user
     path = request.GET.get('path', None)
     bucket_name = request.GET.get('bucket_name', None)
+
     try:
-        err = False
         b = Buckets.objects.get(name=bucket_name)
-    except:
-        err = True
-    if err or b.user != req_user:
-        return Response({
-            'code': 1,
-            'msg': 'not found this bucket'
-        })
-    res = Objects.objects.select_related('bucket').select_related('owner').filter(owner=req_user, bucket=b)
+    except Buckets.DoesNotExist:
+        raise NotFound(detail='not found bucket')
+
+    if isinstance(req_user, AnonymousUser) and 'public' not in b.bucket_acl.get().permission:
+        raise NotAuthenticated(detail='this bucket access policy is private')
+
+    res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
     if path:
         res = res.filter(root=path.replace(',', '/'))
@@ -197,19 +183,17 @@ def list_objects_endpoint(request):
     try:
         cur_page = int(request.GET.get('page', 1))
         size = int(request.GET.get('size', settings.PAGE_SIZE))
-    except:
+    except ValueError:
         cur_page = 1
         size = settings.PAGE_SIZE
 
     page = PageNumberPagination()
-    # page.page_query_param = 'page'
-    # page.page_size_query_param = 'size'
     page.page_size = size
-    # page.page_size = size
     page.number = cur_page
     page.max_page_size = 20
     ret = page.paginate_queryset(res.order_by('type', '-obj_id'), request)
     ser = ObjectsSerialize(ret, many=True)
+
     return Response({
         'code': 0,
         'msg': 'success',
@@ -223,6 +207,7 @@ def list_objects_endpoint(request):
 
 
 @api_view(('PUT', 'POST',))
+@permission_classes((AllowAny,))
 def put_object_endpoint(request):
     req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
@@ -232,25 +217,22 @@ def put_object_endpoint(request):
     permission = request.POST.get('permission', None)
     # 如果没有文件，则直接响应异常
     if not file or not bucket_name:
-        return Response({
-            'code': 1,
-            'msg': 'some required field is mission!'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='some required field is mission')
 
     filename = file.name
     if ',' in filename:
-        raise ParseError({
-            'detail': 'filename contain special char'
-        })
+        raise ParseError(detail='filename contain special char')
 
     # 验证bucket是否为异常bucket
     try:
-        b = Buckets.objects.select_related('bucket_region').get(user=req_user, name=bucket_name)
+        b = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
     except:
-        return Response({
-            'code': 1,
-            'msg': 'not found this bucket'
-        })
+        raise NotFound(detail='not found this bucket')
+
+    bucket_acl = b.bucket_acl.get().permission
+
+    if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
+        raise NotAuthenticated(detail='this bucket access policy is not public read write')
 
     object_acl = ('private', 'public-read', 'public-read-write', 'authenticated-read')
 
@@ -264,17 +246,11 @@ def put_object_endpoint(request):
         p = verify_path(path)
 
     if p and p.owner != req_user and p.bucket.name != bucket_name:
-        return Response({
-            'code': 1,
-            'msg': 'path error'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='illegal path')
 
     # 验证文件名是否超长
     if len(filename) > 1024:
-        return Response({
-            'code': 1,
-            'msg': 'filename to long'
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail='filename is too long')
 
     # 将用户上传的文件写入临时文件，生成md5，然后再分批写入后端rgw
     temp_file = build_tmp_filename()
@@ -360,11 +336,7 @@ def put_object_endpoint(request):
         os.remove(temp_file)
 
     except Exception as e:
-        return Response({
-            'code': 3,
-            'msg': 'put object failed',
-            'err': str(e)
-        }, status=HTTP_400_BAD_REQUEST)
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -373,23 +345,26 @@ def put_object_endpoint(request):
 
 
 @api_view(('GET',))
+@permission_classes((AllowAny,))
 def download_object_endpoint(request):
-    req_user = request.user
     try:
         obj_id = int(request.GET.get('obj_id', None))
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(obj_id=obj_id)
-    except:
-        obj = False
+    except Objects.DoesNotExist:
+        raise NotFound(detail='not found this object resource')
 
-    if (obj and obj.owner != req_user) or not obj or obj.type == 'd':
-        raise ParseError({
-            'detail': 'this file owner is not of you or download object is directory'
-        })
+    obj_perm = obj.object_acl.get().permission
 
-    s3 = s3_client(obj.bucket.bucket_region.reg_id, req_user.username)
+    # 判断资源是否为公共可读
+    if 'public' not in obj_perm and isinstance(request.user, AnonymousUser):
+        raise NotAuthenticated(detail='this resource is private')
+
+    if 'public' not in obj_perm and obj.owner != request.user and obj.type == 'd':
+        raise ParseError(detail='this file owner is not of you or download object is directory')
+
+    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.owner.username)
     tmp = build_tmp_filename()
 
-    print(obj.bucket.name)
     with open(tmp, 'wb') as fp:
         s3.download_fileobj(
             Bucket=obj.bucket.name,
