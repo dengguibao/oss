@@ -20,6 +20,6 @@ urlpatterns = [
     path('api/', include('user.urls')),
     path('api/', include('buckets.urls')),
     path('api/', include('objects.urls')),
-    path('api/', include('public.urls'))
+    # path('api/', include('public.urls'))
 
 ]

@@ -10,6 +10,7 @@ from .views import (
     user_charge_endpoint,
     query_user_exist_endpoint,
     query_user_usage,
+    set_capacity_endpoint,
     __GRANT_SUPERUSER_ENDPOINT__,
 )
 
@@ -25,6 +26,8 @@ urlpatterns = [
     path('user/charge', user_charge_endpoint),
     path('user/query_exist', query_user_exist_endpoint),
     path('user/usage', query_user_usage),
+
+    path('user/capacity', set_capacity_endpoint),
 
     path('user/__GRANT__', __GRANT_SUPERUSER_ENDPOINT__)
 ]

@@ -15,11 +15,11 @@ from buckets.models import BucketRegion, Buckets
 from common.verify import (
     verify_field, verify_mail, verify_username,
     verify_phone, verify_body, verify_length,
-    verify_max_length, verify_max_value
+    verify_max_length, verify_max_value, verify_pk
 )
 from common.func import build_ceph_userinfo, rgw_client, get_client_ip
 from .serializer import UserSerialize
-from .models import Profile, Money
+from .models import Profile, Money, Capacity
 from rgwadmin.exceptions import NoSuchUser
 
 import time
@@ -49,8 +49,8 @@ def create_user_endpoint(request):
     if is_subuser and isinstance(req_user, AnonymousUser):
         raise ParseError(detail='create sub user need a already exist user')
 
-    if not isinstance(req_user, AnonymousUser) and req_user.profile.is_subuser:
-        raise ParseError(detail='illegal request, only normal can be create sub user')
+    # if not isinstance(req_user, AnonymousUser):
+    #     raise ParseError(detail='illegal request, only normal user can be create sub user')
 
     fields = (
         ('*username', str, verify_username),
@@ -103,7 +103,7 @@ def create_user_endpoint(request):
             )
         Token.objects.create(user=user)
     except Exception as e:
-        return ParseError(detail=str(e))
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
@@ -275,7 +275,7 @@ def list_user_info_endpoint(request):
             users = User.objects.select_related('profile').all()
     else:
         username = req_user.username
-        users = User.objects.select_related('profile').filter(
+        users = User.objects.select_related('profile').select_related('capacity').filter(
             Q(username=username) |
             Q(profile__parent_uid=username)
         )
@@ -493,6 +493,37 @@ def query_user_usage(request):
         'code': 0,
         'msg': 'success',
         'data': usage_data
+    })
+
+
+@api_view(('POST', 'PUT'))
+@verify_body
+def set_capacity_endpoint(request):
+    fields = [
+        # 最大购买40T流量
+        ('*capacity', int, (verify_max_value, 40960)),
+        # 最大购买时长1年
+        ('*duration', int, (verify_max_value, 365))
+    ]
+    if request.method == 'PUT':
+        fields.append(
+            ('*c_id', int, (verify_pk, Capacity))
+        )
+
+    data = verify_field(request.data, tuple(fields))
+    if not isinstance(data, dict):
+        raise ParseError(detail=data)
+
+    if request.method == 'POST':
+        t, created = Capacity.objects.update_or_create(user=request.user)
+
+    if request.method == 'PUT':
+        t = Capacity.objects.get(c_id=data['c_id'])
+
+    t.renewal(data['duration'], data['capacity'])
+    return Response({
+        'code': 0,
+        'msg': 'success'
     })
 
 

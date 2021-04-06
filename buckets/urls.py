@@ -5,7 +5,7 @@ from .views import (
     set_buckets_endpoint,
     query_bucket_name_exist_endpoint,
     get_bucket_detail_endpoint,
-    set_bucket_region_endpoint
+    set_bucket_region_endpoint,
 )
 
 urlpatterns = [
@@ -13,5 +13,5 @@ urlpatterns = [
     path('buckets/region', set_bucket_region_endpoint),
     path('buckets/bucket', set_buckets_endpoint),
     path('buckets/query_exist', query_bucket_name_exist_endpoint),
-    path('buckets/detail', get_bucket_detail_endpoint)
+    path('buckets/detail', get_bucket_detail_endpoint),
 ]

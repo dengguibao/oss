@@ -90,8 +90,10 @@ def s3_client(reg_id: int, username: str):
             access_key=u.profile.access_key,
             secret_key=u.profile.secret_key,
             display_name=u.first_name,
+            max_buckets=200,
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
+        rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.traffic.capacity*1024**2)
     conn = Session(
         aws_access_key_id=u.profile.access_key,
         aws_secret_access_key=u.profile.secret_key
@@ -105,6 +107,9 @@ def s3_client(reg_id: int, username: str):
 
 
 def build_ceph_userinfo(username: str) -> tuple:
+    """
+    根据用户名构建ceph_uid, access_key, secret_key
+    """
     x = str(uuid.uuid3(uuid.NAMESPACE_DNS, username)).replace('-', '')
     secret_key = str(uuid.uuid4()).replace('-', '')
 
@@ -114,6 +119,9 @@ def build_ceph_userinfo(username: str) -> tuple:
 
 
 def random_build_str(origin_str: str, uid_len: int) -> str:
+    """
+    随机构建key
+    """
     if len(origin_str) < 32:
         return str(uuid.uuid1()).replace('-', '')[:uid_len]
     data = []
@@ -128,6 +136,9 @@ def random_build_str(origin_str: str, uid_len: int) -> str:
 
 
 def get_client_ip(request):
+    """
+    获取客户端ip地址
+    """
     try:
         remote_ip = request.META['HTTP_X_FORWARDED_FOR'].split(',')[0]
     except KeyError:

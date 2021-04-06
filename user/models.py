@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
-# from django.db.models.signals import post_save
-# from django.dispatch import receiver
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+import time
 
 
 class Profile(models.Model):
@@ -15,19 +16,45 @@ class Profile(models.Model):
     parent_uid = models.CharField(max_length=50, verbose_name='sub account parent account username', blank=True)
     is_subuser = models.BooleanField(verbose_name='is sub user', default=False, blank=False)
 
-
     def __str__(self):
         return f'user profile: {self.user.username}, {self.user.first_name}'
 
 
-# @receiver(post_save, sender=User)
-# def handle_create_user(sender, instance, created, **kwargs):
-#     print(**kwargs)
-#     if created:
-#         Profile.objects.create(user=instance, **kwargs)
-#     else:
-#         print(**kwargs)
-#         Profile.objects.filter(user=instance).update(**kwargs)
+class Capacity(models.Model):
+    c_id = models.AutoField(primary_key=True, auto_created=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='capacity')
+    start_time = models.IntegerField(verbose_name="start time", default=0, blank=False)
+    capacity = models.IntegerField(verbose_name="capacity", default=0, blank=False)
+    duration = models.IntegerField(verbose_name="duration", default=0, blank=False)
+    create_time = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.user.username}, {self.capacity}'
+
+    def calculate_valid_date(self):
+        if time.time() > self.start_time+(self.duration*86400):
+            return False
+
+        if self.capacity <= 0:
+            return False
+
+        return True
+
+    def renewal(self, days: int, cap: int):
+        start_time = self.start_time if self.start_time else time.time()
+        new_start = start_time+(86400*self.duration)
+        self.duration = days
+        self.capacity = cap
+        self.start_time = new_start
+        self.save()
+
+
+@receiver(post_save, sender=User)
+def handle_create_user(sender, instance, created, **kwargs):
+    if created:
+        Capacity.objects.create(user=instance)
+    # else:
+    #     Traffic.objects.filter(user=instance).update(**kwargs)
 
 
 class Money(models.Model):

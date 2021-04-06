@@ -247,6 +247,10 @@ def set_buckets_endpoint(request):
         if request.method == 'POST':
             if query_bucket_exist(data['name']):
                 raise ParseError(detail='the bucket is already exist!')
+            # 判断容量是否足够
+            t = request.user.capacity
+            if not t or not t.calculate_valid_date():
+                raise ParseError(detail='user capacity not enough')
 
             data['user_id'] = req_user.id
             data['start_time'] = int(time.time())

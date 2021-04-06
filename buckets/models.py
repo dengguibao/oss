@@ -43,8 +43,8 @@ class Buckets(models.Model):
     def __str__(self):
         return f'{self.bucket_id}, {self.name}'
 
-    def calculate_cost(self, capacity):
-        return self.bucket_type.price*capacity
+    # def calculate_cost(self, capacity):
+    #     return self.bucket_type.price*capacity
 
     def renewal(self, days: int):
         new_start = (self.start_time+(86400*self.duration))
