@@ -4,7 +4,8 @@ from .views import (
     delete_object_endpoint,
     list_objects_endpoint,
     put_object_endpoint,
-    download_object_endpoint
+    download_object_endpoint,
+    set_object_acl_endpoint,
 )
 
 urlpatterns = [
@@ -12,5 +13,6 @@ urlpatterns = [
     path('objects/delete', delete_object_endpoint),
     path('objects/list_objects', list_objects_endpoint),
     path('objects/upload_file', put_object_endpoint),
-    path('objects/download_file', download_object_endpoint)
+    path('objects/download_file', download_object_endpoint),
+    path('objects/set_acl', set_object_acl_endpoint),
 ]

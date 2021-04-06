@@ -228,7 +228,7 @@ def set_buckets_endpoint(request):
             ('*bucket_region_id', int, (verify_pk, BucketRegion)),
             ('version_control', bool, verify_true_false),
             ('*permission', str,
-             (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated-read'))),
+             (verify_in_array, ('private', 'public-read', 'public-read-write'))),
         ]
     # 删除操作仅需提供bucket_id，具体删除是会验证删除者身份与bucket拥有者的身份
     if request.method == 'DELETE':
@@ -345,6 +345,40 @@ def get_bucket_detail_endpoint(request):
         'msg': 'success',
         'data': data
     })
+
+
+@api_view(('PUT',))
+def set_bucket_acl_endpoint(request):
+    fields = (
+        ('*bucket_id', int, (verify_pk, Buckets)),
+        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write')))
+    )
+    data = verify_field(request.data, fields)
+    if not isinstance(data, dict):
+        raise ParseError(detail=data)
+
+    b = Buckets.objects.select_related('bucket_region').get(bucket_id=data['bucket_id'])
+
+    if b.user != request.user:
+        raise NotAuthenticated(detail='user and bucket not match')
+    try:
+        s3 = s3_client(b.bucket_region.reg_id, request.user.username)
+        s3.put_bucket_acl(
+            ACL=data['permission'],
+            Bucket=b.name
+        )
+        b_acl = b.bucket_acl.get()
+        b_acl.permission = data['permission']
+        b_acl.save()
+    except Exception as e:
+        raise ParseError(detail=str(e))
+
+    return Response({
+        'code': 0,
+        'msg': 'success'
+    })
+
+
 
 
 def query_bucket_exist(name):

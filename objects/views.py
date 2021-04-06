@@ -12,7 +12,7 @@ from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from common.verify import (
     verify_body, verify_object_name,
-    verify_field, verify_object_path, verify_bucket_name
+    verify_field, verify_object_path, verify_bucket_name, verify_pk, verify_in_array
 )
 from common.func import verify_path, build_tmp_filename, file_iter, s3_client
 from .serializer import ObjectsSerialize
@@ -234,7 +234,7 @@ def put_object_endpoint(request):
     if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
         raise NotAuthenticated(detail='this bucket access policy is not public read write')
 
-    object_acl = ('private', 'public-read', 'public-read-write', 'authenticated-read')
+    object_acl = ('private', 'public-read', 'public-read-write')
 
     if not permission or permission not in object_acl:
         permission = BucketAcl.objects.get(bucket=b).permission
@@ -376,3 +376,37 @@ def download_object_endpoint(request):
     res['Content-Type'] = 'application/octet-stream'
     res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
     return res
+
+
+@api_view(('PUT',))
+def set_object_acl_endpoint(request):
+    fields = (
+        ('*obj_id', int, (verify_pk, Objects)),
+        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write')))
+    )
+    data = verify_field(request.data, fields)
+    if not isinstance(data, dict):
+        raise ParseError(detail=data)
+
+    o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=data['obj_id'])
+
+    if o.owner != request.user and o.bucket.user != request.user:
+        raise NotAuthenticated(detail='user and bucket owner and object owner not match')
+
+    try:
+        s3 = s3_client(o.bucket.bucket_region.reg_id, request.user.username)
+        s3.put_object_acl(
+            ACL=data['permission'],
+            Bucket=o.bucket.name,
+            Key=o.key
+        )
+        o_acl = o.object_acl.get()
+        o_acl.permission = data['permission']
+        o_acl.save()
+    except Exception as e:
+        raise ParseError(detail=str(e))
+
+    return Response({
+        'code': 0,
+        'msg': 'success'
+    })

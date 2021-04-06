@@ -93,7 +93,7 @@ def s3_client(reg_id: int, username: str):
             max_buckets=200,
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
-        rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.traffic.capacity*1024**2)
+        rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.capacity.capacity*1024**2)
     conn = Session(
         aws_access_key_id=u.profile.access_key,
         aws_secret_access_key=u.profile.secret_key
