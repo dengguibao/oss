@@ -36,20 +36,19 @@ def create_user_endpoint(request):
     :param request:
     :return:
     """
-    is_subuser = request.GET.get('is_subuser', 0)
     try:
-        is_subuser = int(is_subuser)
+        is_subuser = int(request.GET.get('is_subuser', 0))
     except ValueError:
         is_subuser = 0
-    else:
-        is_subuser = True if is_subuser == 1 else False
+
+    is_subuser = True if is_subuser == 1 else False
 
     req_user = request.user
 
     if is_subuser and isinstance(req_user, AnonymousUser):
         raise ParseError(detail='create sub user need a already exist user')
 
-    # if not isinstance(req_user, AnonymousUser):
+    # if not isinstance(req_user, AnonymousUser) and not request.user.profile.is_subuser:
     #     raise ParseError(detail='illegal request, only normal user can be create sub user')
 
     fields = (
@@ -80,6 +79,20 @@ def create_user_endpoint(request):
         raise ParseError(detail='the user is already exist')
 
     try:
+        User.objects.get(email=data['email'])
+    except User.DoesNotExist:
+        pass
+    else:
+        raise ParseError(detail='the email is already exist')
+
+    try:
+        Profile.objects.get(phone=data['phone'])
+    except Profile.DoesNotExist:
+        pass
+    else:
+        raise ParseError(detail='the phone number already exist')
+
+    try:
         user = User.objects.create_user(
             username=data['username'],
             password=data['pwd'],
@@ -96,11 +109,11 @@ def create_user_endpoint(request):
             p.parent_uid = request.user.username
             p.save()
 
-        if not is_subuser:
-            Money.objects.create(
-                user=user,
-                amount=0.0
-            )
+        # if not is_subuser:
+        Money.objects.create(
+            user=user,
+            amount=0.0
+        )
         Token.objects.create(user=user)
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -218,8 +231,8 @@ def user_delete_endpoint(request):
     :param request:
     :return:
     """
-    if not request.user.is_superuser:
-        raise NotAuthenticated(detail='permission denied!')
+    # if not request.user.is_superuser:
+    #     raise NotAuthenticated(detail='permission denied!')
 
     fields = (
         ('*username', str, verify_username),
@@ -233,9 +246,12 @@ def user_delete_endpoint(request):
         u = User.objects.get(pk=data['user_id'])
     except User.DoesNotExist:
         raise NotFound(detail='not found this user')
-    else:
-        if u.username != data['username']:
-            raise ParseError(detail='username and user_id not match')
+
+    if not request.user.is_superuser and u != request.user:
+        raise NotAuthenticated(detail='permission denied')
+
+    if u.username != data['username']:
+        raise ParseError(detail='username and user_id not match')
 
     if u.profile.phone_verify:
         region = BucketRegion.objects.all()
@@ -429,12 +445,27 @@ def user_charge_endpoint(request):
 @permission_classes((AllowAny,))
 def query_user_exist_endpoint(request):
     username = request.GET.get('username', None)
+    phone = request.GET.get('phone', None)
+    email = request.GET.get('email', None)
+
+    exist = True
     try:
-        User.objects.get(username=username)
+        if username:
+            User.objects.get(username=username)
+
+        if phone:
+            Profile.objects.get(phone=phone)
+
+        if email:
+            User.objects.get(email=email)
     except User.DoesNotExist:
         exist = False
-    else:
+    except User.MultipleObjectsReturned:
         exist = True
+    except Profile.DoesNotExist:
+        exist = False
+
+
 
     return Response({
         'code': 0,
