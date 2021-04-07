@@ -64,7 +64,7 @@ def create_directory_endpoint(request):
             key = data['folder_name'] + '/'
 
         # 初始化s3客户端
-        s3 = s3_client(b.bucket_region.reg_id, req_user.username)
+        s3 = s3_client(b.bucket_region.reg_id, b.user.username)
         d = s3.put_object(Bucket=b.name, Body=b'', Key=key)
         # 创建空对象，目录名为空对象
         record_data = {
@@ -75,7 +75,7 @@ def create_directory_endpoint(request):
             'type': 'd',
             'key': key,
             'root': data['path'] if 'path' in data else None,
-            'owner': req_user
+            'owner': b.user if bucket_acl == 'public-read-write' else req_user
         }
         Objects.objects.create(**record_data)
 
