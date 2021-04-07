@@ -5,9 +5,11 @@ from objects.models import Objects
 from buckets.models import BucketRegion
 from django.contrib.auth.models import User
 from rgwadmin.exceptions import NoSuchUser
+from hashlib import md5
 import random
 import os
 import uuid
+import requests
 
 def init_rgw_api():
     access_key, secret_key, server = settings.RGW_API_KEY['NORMAL']
@@ -145,3 +147,24 @@ def get_client_ip(request):
     except KeyError:
         remote_ip = request.META.get('REMOTE_ADDR', None)
     return remote_ip
+
+
+def send_phone_verify_code(phone: str):
+    sn = 'SDK-BBX-010-37896'
+    pwd = 'ihEb64rQ'
+    mix_pwd = '%s%s' % (sn, pwd)
+    mobile = phone
+    verify_code = ''.join(random.sample('0123456789', 6))
+    ret = requests.post(
+        'http://sdk.entinfo.cn:8061/mdsmssend.ashx',
+        headers={
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        data={
+            'sn': sn,
+            'pwd': md5(mix_pwd.encode()).hexdigest().upper(),
+            'mobile': mobile,
+            'content': '【FuRongCloud】芙蓉云对象存储短信验证码为：%s，切勿将验证码泄露于他人，本条验证码有效期15分钟。' % verify_code
+        }
+    )
+    return ret.status_code, verify_code

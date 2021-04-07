@@ -17,7 +17,7 @@ from common.verify import (
     verify_phone, verify_body, verify_length,
     verify_max_length, verify_max_value, verify_pk
 )
-from common.func import build_ceph_userinfo, rgw_client, get_client_ip
+from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_phone_verify_code
 from .serializer import UserSerialize
 from .models import Profile, Money, Capacity
 from rgwadmin.exceptions import NoSuchUser
@@ -369,7 +369,7 @@ def get_user_detail_endpoint(request, user_id):
     })
 
 
-@api_view(('POST',))
+@api_view(('POST', 'GET',))
 @verify_body
 def verify_user_phone_endpoint(request):
     """
@@ -378,35 +378,55 @@ def verify_user_phone_endpoint(request):
     :param request:
     :return:
     """
-    fields = (
-        ('*phone', str, verify_phone),
-        ('*verify_code', str, (verify_length, 6))
-    )
-    data = verify_field(request.body, fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    if request.method == 'GET':
+        if not request.user.profile.phone_verify:
+            status_code, verify_code = send_phone_verify_code(request.user.profile.phone)
 
-    user = request.user
+            if status_code == 200:
+                cache.set('phone_verify_code_%s' % request.user.profile.phone, verify_code)
+        else:
+            raise ParseError(detail='phone already verification')
 
-    if user.profile.phone != data['phone'] or user.profile.phone_verify:
-        raise ParseError(detail='phone number error or that user is already verification')
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        })
 
-    uid, access_key, secret_key = build_ceph_userinfo(user.username)
-    # print(uid,access_key,secret_key)
-    p = Profile.objects.get(user=user)
-    p.__dict__.update(
-        **{
-            'phone_verify': True,
-            'access_key': access_key,
-            'secret_key': secret_key,
-            'ceph_uid': uid
-        }
-    )
-    p.save()
-    return Response({
-        'code': 0,
-        'msg': 'success',
-    })
+    if request.method == 'POST':
+        fields = (
+            ('*phone', str, verify_phone),
+            ('*verify_code', str, (verify_length, 6))
+        )
+        data = verify_field(request.body, fields)
+        if not isinstance(data, dict):
+            raise ParseError(detail=data)
+
+        user = request.user
+
+        if user.profile.phone != data['phone'] or user.profile.phone_verify:
+            raise ParseError(detail='phone number error or that user is already verification')
+
+        verify_code = cache.get('phone_verify_code_%s' % user.profile.phone)
+        if not verify_code or data['verify_code'] != verify_code:
+            raise ParseError(detail='verification code error')
+
+        cache.delete('phone_verify_code_%s' % user.profile.phone)
+        uid, access_key, secret_key = build_ceph_userinfo(user.username)
+        # print(uid,access_key,secret_key)
+        p = Profile.objects.get(user=user)
+        p.__dict__.update(
+            **{
+                'phone_verify': True,
+                'access_key': access_key,
+                'secret_key': secret_key,
+                'ceph_uid': uid
+            }
+        )
+        p.save()
+        return Response({
+            'code': 0,
+            'msg': 'success',
+        })
 
 
 @api_view(('POST',))
