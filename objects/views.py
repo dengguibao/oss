@@ -47,7 +47,7 @@ def create_directory_endpoint(request):
         raise NotAuthenticated(detail='this bucket access policy is not public read write')
 
     if bucket_acl != 'public-read-write' and req_user.id != b.user_id:
-        raise ParseError(detail='bucket resource not match')
+        raise ParseError(detail='bucket and user not match')
 
     try:
         if 'path' in data:
@@ -169,9 +169,12 @@ def list_objects_endpoint(request):
         b = Buckets.objects.get(name=bucket_name)
     except Buckets.DoesNotExist:
         raise NotFound(detail='not found bucket')
-
-    if isinstance(req_user, AnonymousUser) and 'public' not in b.bucket_acl.get().permission:
+    bucket_acl = b.bucket_acl.get().permission
+    if isinstance(req_user, AnonymousUser) and 'public' not in bucket_acl:
         raise NotAuthenticated(detail='this bucket access policy is private')
+
+    if b.user != req_user and 'public' not in bucket_acl:
+        raise NotAuthenticated(detail='bucket owner not match')
 
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
@@ -221,7 +224,7 @@ def put_object_endpoint(request):
 
     filename = file.name
     if ',' in filename:
-        raise ParseError(detail='filename contain special char')
+        raise ParseError(detail='filename contains some special char')
 
     # 验证bucket是否为异常bucket
     try:
@@ -231,8 +234,11 @@ def put_object_endpoint(request):
 
     bucket_acl = b.bucket_acl.get().permission
 
+    if b.user != req_user and 'public-read-write' != bucket_acl:
+        raise NotAuthenticated(detail='bucket owner not match')
+
     if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
-        raise NotAuthenticated(detail='this bucket access policy is not public read write')
+        raise NotAuthenticated(detail='this bucket access ACL is not contain public-read-write')
 
     object_acl = ('private', 'public-read', 'public-read-write')
 

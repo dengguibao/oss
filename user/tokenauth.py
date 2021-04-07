@@ -15,11 +15,11 @@ class ExpireTokenAuthentication(TokenAuthentication):
         sk = request.GET.get('secret_key', None)
         if ak and sk:
             try:
-                p = Profile.objects.get()
+                p = Profile.objects.get(access_key=ak, secret_key=sk)
             except Profile.DoesNotExist:
                 p = None
 
-            if p and request.META['PATH_INFO'].startswith('/api/objects'):
+            if p and p.user.is_active and request.META['PATH_INFO'].startswith('/api/objects'):
                 return p.user, None
 
         auth = request.META.get('HTTP_AUTHORIZATION', b'')
