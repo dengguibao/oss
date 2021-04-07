@@ -219,6 +219,7 @@ def put_object_endpoint(request):
     file = request.FILES.get('file', None)
     path = request.POST.get('path', None)
     permission = request.POST.get('permission', None)
+
     # 如果没有文件，则直接响应异常
     if not file or not bucket_name:
         raise ParseError(detail='some required field is mission')
@@ -268,7 +269,7 @@ def put_object_endpoint(request):
             f.write(chunk)
 
     try:
-        s3 = s3_client(b.bucket_region.reg_id, req_user.username)
+        s3 = s3_client(b.bucket_region.reg_id, b.user.username)
         if p:
             root = path
         else:
@@ -327,7 +328,7 @@ def put_object_endpoint(request):
             'md5': md5.hexdigest(),
             'etag': d['ETag'] if 'ETag' in d else None,
             'version_id': d['VersionId'] if 'VersionId' in d else None,
-            'owner_id': req_user.id
+            'owner_id': b.user.id if bucket_acl == 'public-read-write' else req_user.id
         }
         if b.version_control:
             upload_obj = Objects.objects.create(**record_data)
@@ -337,7 +338,7 @@ def put_object_endpoint(request):
         ObjectAcl.objects.update_or_create(
             object=upload_obj,
             permission=permission,
-            user=req_user,
+            user_id=b.user.id if bucket_acl == 'public-read-write' else req_user.id,
         )
         # 删除临时文件
         os.remove(temp_file)

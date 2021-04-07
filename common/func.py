@@ -4,6 +4,7 @@ from django.conf import settings
 from objects.models import Objects
 from buckets.models import BucketRegion
 from django.contrib.auth.models import User
+from rgwadmin.exceptions import NoSuchUser
 import random
 import os
 import uuid
@@ -49,7 +50,7 @@ def verify_path(path):
         return False
     try:
         obj = Objects.objects.select_related("bucket").get(key=path, type='d')
-    except:
+    except Objects.DoesNotExist:
         return False
     else:
         return obj
@@ -84,7 +85,7 @@ def s3_client(reg_id: int, username: str):
     rgw = rgw_client(reg_id)
     try:
         rgw.get_user(uid=u.profile.ceph_uid)
-    except:
+    except NoSuchUser:
         rgw.create_user(
             uid=u.profile.ceph_uid,
             access_key=u.profile.access_key,
@@ -93,7 +94,7 @@ def s3_client(reg_id: int, username: str):
             max_buckets=200,
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
-    rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.capacity.capacity*1024**2)
+    rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.capacity.capacity*1024**2, enabled=True, quota_type='user')
     conn = Session(
         aws_access_key_id=u.profile.access_key,
         aws_secret_access_key=u.profile.secret_key
