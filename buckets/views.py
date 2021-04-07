@@ -7,7 +7,7 @@ from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
 from django.db.models import Q
 from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
-    verify_max_length, verify_body, verify_field, verify_length,
+    verify_max_length, verify_body, verify_field,
     verify_bucket_name, verify_max_value, verify_pk,
     verify_true_false, verify_in_array
 )
@@ -379,6 +379,24 @@ def set_bucket_acl_endpoint(request):
     })
 
 
+@api_view(('GET',))
+def query_bucket_acl_endpoint(request):
+    bucket_id = request.GET.get('bucket_id', None)
+    try:
+        b = Buckets.objects.get(bucket_id=bucket_id)
+    except Buckets.DoesNotExist:
+        raise NotFound(detail='not found bucket')
+
+    bucket_acl = b.bucket_acl.get().permission
+
+    if request.user != b.user:
+        raise NotAuthenticated(detail='bucket and user not match')
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'permission': bucket_acl
+    })
 
 
 def query_bucket_exist(name):

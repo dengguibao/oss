@@ -6,6 +6,7 @@ from .views import (
     put_object_endpoint,
     download_object_endpoint,
     set_object_acl_endpoint,
+    query_object_acl_endpoint,
 )
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path('objects/upload_file', put_object_endpoint),
     path('objects/download_file', download_object_endpoint),
     path('objects/set_acl', set_object_acl_endpoint),
+    path('objects/query_acl', query_object_acl_endpoint),
 ]

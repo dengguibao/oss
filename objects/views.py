@@ -12,7 +12,8 @@ from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from common.verify import (
     verify_body, verify_object_name,
-    verify_field, verify_object_path, verify_bucket_name, verify_pk, verify_in_array
+    verify_field, verify_object_path,
+    verify_bucket_name, verify_pk, verify_in_array
 )
 from common.func import verify_path, build_tmp_filename, file_iter, s3_client
 from .serializer import ObjectsSerialize
@@ -415,4 +416,29 @@ def set_object_acl_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success'
+    })
+
+
+@api_view(('GET',))
+def query_object_acl_endpoint(request):
+    obj_id = request.GET.get('obj_id', None)
+    try:
+        o = Objects.objects.get(obj_id=int(obj_id))
+    except Objects.DoesNotExist:
+        raise NotFound(detail='not found object')
+
+    b = o.bucket
+    bucket_acl = b.bucket_acl.get().permission
+    object_acl = o.object_acl.get().permission
+
+    if 'public' not in bucket_acl and isinstance(request.user, AnonymousUser):
+        raise NotAuthenticated(detail='bucket access permission not contain public-read or public-read-write')
+
+    if 'public' not in bucket_acl and request.user != o.owner and request.user != b.user:
+        raise NotAuthenticated(detail='object and owner not match')
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'permission': object_acl
     })
