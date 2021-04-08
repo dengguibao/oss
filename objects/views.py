@@ -368,7 +368,7 @@ def download_object_endpoint(request):
     if 'public' not in obj_perm and isinstance(request.user, AnonymousUser):
         raise NotAuthenticated(detail='this resource is private')
 
-    if 'public' not in obj_perm and obj.owner != request.user and obj.type == 'd':
+    if ('public' not in obj_perm and obj.owner != request.user) or obj.type == 'd':
         raise ParseError(detail='this file owner is not of you or download object is directory')
 
     s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.owner.username)
