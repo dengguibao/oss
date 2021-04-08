@@ -142,6 +142,7 @@ def user_login_endpoint(request):
     if not isinstance(data, dict):
         raise ParseError(detail=data)
 
+    # -------------- login phone verify ------------
     verify_code = cache.get('phone_verify_code_%s' % request.user.profile.phone)
     if not verify_code:
         raise ParseError(detail='get phone verification code failed')
@@ -152,7 +153,9 @@ def user_login_endpoint(request):
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
         raise ParseError(detail='username or password has wrong!')
+    cache.delete('phone_verify_code_%s' % request.user.profile.phone)
 
+    # ------------- end ------------------
     try:
         Token.objects.get(user=user).delete()
     except Token.DoesNotExist:
@@ -383,7 +386,7 @@ def get_user_detail_endpoint(request):
     })
 
 
-@api_view(('POST', 'GET',))
+@api_view(('POST',))
 @verify_body
 def verify_user_phone_endpoint(request):
     """
@@ -392,20 +395,6 @@ def verify_user_phone_endpoint(request):
     :param request:
     :return:
     """
-    if request.method == 'GET':
-        if not cache.get('phone_verify_code_%s' % request.user.profile.phone):
-            status_code, verify_code = send_phone_verify_code(request.user.profile.phone)
-
-            if status_code == 200:
-                cache.set('phone_verify_code_%s' % request.user.profile.phone, verify_code, 900)
-        else:
-            raise ParseError(detail='verification code already send')
-
-        return Response({
-            'code': 0,
-            'msg': 'success'
-        })
-
     if request.method == 'POST':
         fields = (
             ('*phone', str, verify_phone),
@@ -440,6 +429,29 @@ def verify_user_phone_endpoint(request):
         return Response({
             'code': 0,
             'msg': 'success',
+        })
+
+
+@api_view(('GET',))
+@permission_classes((AllowAny,))
+def send_phone_verify_code_endpoint(request):
+    if request.method == 'GET':
+        try:
+            username = request.GET.get('username', None)
+            user = User.objects.select_related('profile').get(username=username)
+        except User.DoesNotExist:
+            raise NotFound('not found this user')
+
+        if not cache.get('phone_verify_code_%s' % user.profile.phone):
+            status_code, verify_code = send_phone_verify_code(user.profile.phone)
+            if status_code == 200:
+                cache.set('phone_verify_code_%s' % user.profile.phone, verify_code, 120)
+        else:
+            raise ParseError(detail='verification code already send')
+
+        return Response({
+            'code': 0,
+            'msg': 'success'
         })
 
 
