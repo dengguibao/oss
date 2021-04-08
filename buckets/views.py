@@ -302,7 +302,7 @@ def set_buckets_endpoint(request):
             bucket.delete()
 
     except Exception as e:
-        return ParseError(detail=str(e))
+        raise ParseError(detail=str(e))
 
     return Response({
         'code': 0,
