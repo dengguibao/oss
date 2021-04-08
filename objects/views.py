@@ -225,8 +225,9 @@ def put_object_endpoint(request):
         raise ParseError(detail='some required field is mission')
 
     filename = file.name
-    if ',' in filename:
-        raise ParseError(detail='filename contains some special char')
+    for i in [',', '/', '\\']:
+        if i in filename:
+            raise ParseError(detail='filename contains some special char')
 
     # 验证bucket是否为异常bucket
     try:

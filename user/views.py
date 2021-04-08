@@ -389,7 +389,7 @@ def verify_user_phone_endpoint(request):
             status_code, verify_code = send_phone_verify_code(request.user.profile.phone)
 
             if status_code == 200:
-                cache.set('phone_verify_code_%s' % request.user.profile.phone, verify_code)
+                cache.set('phone_verify_code_%s' % request.user.profile.phone, verify_code, 900)
         else:
             raise ParseError(detail='verification code already send')
 
