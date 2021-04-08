@@ -164,7 +164,7 @@ def send_phone_verify_code(phone: str):
             'sn': sn,
             'pwd': md5(mix_pwd.encode()).hexdigest().upper(),
             'mobile': mobile,
-            'content': '【FuRongCloud】芙蓉云对象存储短信验证码为：%s，切勿将验证码泄露于他人，本条验证码有效期15分钟。' % verify_code
+            'content': '【FuRongCloud】芙蓉云对象存储短信验证码为：%s，切勿将验证码泄露于他人，本条验证码有效期2分钟。' % verify_code
         }
     )
     return ret.status_code, verify_code

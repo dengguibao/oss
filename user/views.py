@@ -161,12 +161,17 @@ def user_login_endpoint(request):
         raise ParseError(detail='username or password has wrong!')
     # ------------- end ------------------
     try:
-        Token.objects.get(user=user).delete()
+        t = Token.objects.get(user=user)
+        tk = t.key
+        t.delete()
     except Token.DoesNotExist:
         pass
+    else:
+        cache.delete('token_%s' % tk)
+    finally:
+        tk, create = Token.objects.update_or_create(user=user)
+        cache_request_user_meta_info(tk, request)
 
-    token, create = Token.objects.update_or_create(user=user)
-    cache_request_user_meta_info(token, request)
     # 使用django login方法登陆，不然没有登陆记录，但是不需要任何session
     login(request, user=user)
     request.session.clear()
@@ -176,7 +181,7 @@ def user_login_endpoint(request):
         'code': 0,
         'msg': 'success',
         'data': {
-            'token': token.key,
+            'token': tk.key,
             'user_id': user.pk,
             'username': user.username,
             'phone_verify': user.profile.phone_verify,

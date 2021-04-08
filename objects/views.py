@@ -114,7 +114,9 @@ def delete_object_endpoint(request):
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
-    object_acl = o.object_acl.get().permission
+    object_acl = 'private'
+    if o.type == 'f':
+        object_acl = o.object_acl.get().permission
 
     if (isinstance(req_user, AnonymousUser) and object_acl != 'public-read-write') or \
             object_acl != 'public-read-write' and o.owner != req_user:
