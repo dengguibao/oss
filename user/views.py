@@ -155,19 +155,18 @@ def user_login_endpoint(request):
     if verify_code != data['verify_code']:
         raise ParseError(detail='phone verification code has wrong!')
     cache.delete('phone_verify_code_%s' % u.profile.phone)
-
+    # ------------- end ------------------
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
         raise ParseError(detail='username or password has wrong!')
-    # ------------- end ------------------
+
     try:
         t = Token.objects.get(user=user)
         tk = t.key
         t.delete()
+        cache.delete('token_%s' % tk)
     except Token.DoesNotExist:
         pass
-    else:
-        cache.delete('token_%s' % tk)
     finally:
         tk, create = Token.objects.update_or_create(user=user)
         cache_request_user_meta_info(tk, request)
