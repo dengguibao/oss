@@ -102,7 +102,7 @@ def set_bucket_region_endpoint(request):
         if request.user.is_superuser:
             o = o.values()
         else:
-            o = o.values(('reg_id', 'name'))
+            o = o.values('reg_id', 'name')
 
         return Response({
             'code': 0,
