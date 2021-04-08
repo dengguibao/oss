@@ -142,19 +142,23 @@ def user_login_endpoint(request):
     if not isinstance(data, dict):
         raise ParseError(detail=data)
 
+    try:
+        u = User.objects.get(username=data['username'])
+    except User.DoesNotExist:
+        raise NotFound('not found this user')
+
     # -------------- login phone verify ------------
-    verify_code = cache.get('phone_verify_code_%s' % request.user.profile.phone)
+    verify_code = cache.get('phone_verify_code_%s' % u.profile.phone)
     if not verify_code:
         raise ParseError(detail='get phone verification code failed')
 
     if verify_code != data['verify_code']:
         raise ParseError(detail='phone verification code has wrong!')
+    cache.delete('phone_verify_code_%s' % u.profile.phone)
 
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
         raise ParseError(detail='username or password has wrong!')
-    cache.delete('phone_verify_code_%s' % request.user.profile.phone)
-
     # ------------- end ------------------
     try:
         Token.objects.get(user=user).delete()
