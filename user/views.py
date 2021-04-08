@@ -134,12 +134,20 @@ def user_login_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*password', str, (verify_max_length, 30))
+        ('*password', str, (verify_max_length, 30)),
+        ('*verify_code', str, (verify_length, 6))
     )
 
     data = verify_field(request.body, fields)
     if not isinstance(data, dict):
         raise ParseError(detail=data)
+
+    verify_code = cache.get('phone_verify_code_%s' % request.user.profile.phone)
+    if not verify_code:
+        raise ParseError(detail='get phone verification code failed')
+
+    if verify_code != data['verify_code']:
+        raise ParseError(detail='phone verification code has wrong!')
 
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
