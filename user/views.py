@@ -327,7 +327,7 @@ def list_user_info_endpoint(request):
 
 
 @api_view(('GET',))
-def get_user_detail_endpoint(request, user_id):
+def get_user_detail_endpoint(request):
     """
     列出某个用户的所有详细信息
     超级管理员可以查看所有用户的信息，普通用户可以查看对应的子帐户信息
@@ -338,12 +338,18 @@ def get_user_detail_endpoint(request, user_id):
     # u = User.objects.get(pk=user_id)
 
     try:
-        u = User.objects.get(pk=user_id)
-        p = Profile.objects.get(user=u)
-        m = Money.objects.get(user=u)
-        b = Buckets.objects.filter(user=u)
+        user_id = request.GET.get('user_id', None)
+        if int(user_id):
+            u = User.objects.get(pk=user_id)
+            p = Profile.objects.get(user=u)
+            m = Money.objects.get(user=u)
+            b = Buckets.objects.filter(user=u)
     except Profile.DoesNotExist:
-        raise ParseError(detail='user_id has wrong!')
+        raise ParseError(detail='not found user profile')
+    except Money.DoesNotExist:
+        raise ParseError(detail='not found money object')
+    except ValueError:
+        raise ParseError(detail='user_id is not a number')
 
     req_username = request.user.username
 
@@ -379,13 +385,13 @@ def verify_user_phone_endpoint(request):
     :return:
     """
     if request.method == 'GET':
-        if not request.user.profile.phone_verify:
+        if not cache.get('phone_verify_code_%s' % request.user.profile.phone):
             status_code, verify_code = send_phone_verify_code(request.user.profile.phone)
 
             if status_code == 200:
                 cache.set('phone_verify_code_%s' % request.user.profile.phone, verify_code)
         else:
-            raise ParseError(detail='phone already verification')
+            raise ParseError(detail='verification code already send')
 
         return Response({
             'code': 0,
@@ -484,8 +490,6 @@ def query_user_exist_endpoint(request):
         exist = True
     except Profile.DoesNotExist:
         exist = False
-
-
 
     return Response({
         'code': 0,
