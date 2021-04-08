@@ -43,7 +43,7 @@ def file_iter(filename):
                 yield d
             else:
                 break
-        os.remove(filename)
+    os.remove(filename)
 
 
 def verify_path(path):

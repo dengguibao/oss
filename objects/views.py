@@ -174,6 +174,7 @@ def list_objects_endpoint(request):
     if isinstance(req_user, AnonymousUser) and 'public' not in bucket_acl:
         raise NotAuthenticated(detail='this bucket access policy is private')
 
+    print(b.user, req_user)
     if b.user != req_user and 'public' not in bucket_acl:
         raise NotAuthenticated(detail='bucket owner not match')
 
