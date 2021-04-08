@@ -148,13 +148,13 @@ def user_login_endpoint(request):
         raise NotFound('not found this user')
 
     # -------------- login phone verify ------------
-    verify_code = cache.get('phone_verify_code_%s' % u.profile.phone)
-    if not verify_code:
-        raise ParseError(detail='get phone verification code failed')
-
-    if verify_code != data['verify_code']:
-        raise ParseError(detail='phone verification code has wrong!')
-    cache.delete('phone_verify_code_%s' % u.profile.phone)
+    # verify_code = cache.get('phone_verify_code_%s' % u.profile.phone)
+    # if not verify_code:
+    #     raise ParseError(detail='get phone verification code failed')
+    #
+    # if verify_code != data['verify_code']:
+    #     raise ParseError(detail='phone verification code has wrong!')
+    # cache.delete('phone_verify_code_%s' % u.profile.phone)
     # ------------- end ------------------
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
@@ -170,6 +170,20 @@ def user_login_endpoint(request):
     finally:
         tk, create = Token.objects.update_or_create(user=user)
         cache_request_user_meta_info(tk, request)
+
+    # 首次登陆将生成access_key, secret_key, ceph_uid
+    if not user.profile.phone_verify:
+        uid, access_key, secret_key = build_ceph_userinfo(user.username)
+        p = u.profile
+        p.__dict__.update(
+            **{
+                'phone_verify': True,
+                'access_key': access_key,
+                'secret_key': secret_key,
+                'ceph_uid': uid
+            }
+        )
+        p.save()
 
     # 使用django login方法登陆，不然没有登陆记录，但是不需要任何session
     login(request, user=user)
@@ -216,24 +230,29 @@ def change_password_endpoint(request):
 
     if not isinstance(data, dict):
         raise ParseError(detail=data)
-
+    # 验证两次密码是否一样
     if data['pwd1'] != data['pwd2']:
         raise ParseError(detail='the old and new password is not match!')
-
-    user = None
+    # 超级管理员则查询指定的用户
     if request.user.is_superuser:
         try:
             user = User.objects.get(username=data['username'])
         except User.DoesNotExist:
-            pass
+            user = None
     else:
-        user = authenticate(username=data['username'], password=data['old_pwd'])
-        # user = User.objects.get(username='te2st')
+        user = request.user
 
     if user and user.username != data['username']:
         raise ParseError(detail='error username!')
 
-    user.set_password(data['pwd1'])
+    if request.user.is_superuser:
+        user.set_password(data['pwd1'])
+
+    if not request.user.is_superuser and authenticate(username=data['username'], password=data['old_pwd']):
+        user.set_password(data['pwd1'])
+    else:
+        raise ParseError('old password is error!')
+
     user.save()
 
     return Response({
@@ -394,50 +413,50 @@ def get_user_detail_endpoint(request):
     })
 
 
-@api_view(('POST',))
-@verify_body
-def verify_user_phone_endpoint(request):
-    """
-    验证用户注册时填写的手机号码，确认真实有效
-    只有成功通过手机验证的用户才允许在ceph集群上创建对应的帐户
-    :param request:
-    :return:
-    """
-    if request.method == 'POST':
-        fields = (
-            ('*phone', str, verify_phone),
-            ('*verify_code', str, (verify_length, 6))
-        )
-        data = verify_field(request.body, fields)
-        if not isinstance(data, dict):
-            raise ParseError(detail=data)
-
-        user = request.user
-
-        if user.profile.phone != data['phone'] or user.profile.phone_verify:
-            raise ParseError(detail='phone number error or that user is already verification')
-
-        verify_code = cache.get('phone_verify_code_%s' % user.profile.phone)
-        if not verify_code or data['verify_code'] != verify_code:
-            raise ParseError(detail='verification code error')
-
-        cache.delete('phone_verify_code_%s' % user.profile.phone)
-        uid, access_key, secret_key = build_ceph_userinfo(user.username)
-        # print(uid,access_key,secret_key)
-        p = Profile.objects.get(user=user)
-        p.__dict__.update(
-            **{
-                'phone_verify': True,
-                'access_key': access_key,
-                'secret_key': secret_key,
-                'ceph_uid': uid
-            }
-        )
-        p.save()
-        return Response({
-            'code': 0,
-            'msg': 'success',
-        })
+# @api_view(('POST',))
+# @verify_body
+# def verify_user_phone_endpoint(request):
+#     """
+#     验证用户注册时填写的手机号码，确认真实有效
+#     只有成功通过手机验证的用户才允许在ceph集群上创建对应的帐户
+#     :param request:
+#     :return:
+#     """
+#     if request.method == 'POST':
+#         fields = (
+#             ('*phone', str, verify_phone),
+#             ('*verify_code', str, (verify_length, 6))
+#         )
+#         data = verify_field(request.body, fields)
+#         if not isinstance(data, dict):
+#             raise ParseError(detail=data)
+#
+#         user = request.user
+#
+#         if user.profile.phone != data['phone'] or user.profile.phone_verify:
+#             raise ParseError(detail='phone number error or that user is already verification')
+#
+#         verify_code = cache.get('phone_verify_code_%s' % user.profile.phone)
+#         if not verify_code or data['verify_code'] != verify_code:
+#             raise ParseError(detail='verification code error')
+#
+#         cache.delete('phone_verify_code_%s' % user.profile.phone)
+#         uid, access_key, secret_key = build_ceph_userinfo(user.username)
+#         # print(uid,access_key,secret_key)
+#         p = Profile.objects.get(user=user)
+#         p.__dict__.update(
+#             **{
+#                 'phone_verify': True,
+#                 'access_key': access_key,
+#                 'secret_key': secret_key,
+#                 'ceph_uid': uid
+#             }
+#         )
+#         p.save()
+#         return Response({
+#             'code': 0,
+#             'msg': 'success',
+#         })
 
 
 @api_view(('GET',))
@@ -546,7 +565,7 @@ def query_user_usage(request):
         raise NotFound(detail='not fount this user')
 
     if not start_time or not check_date_format(start_time):
-        start_time = time.strftime(fmt, time.localtime(time.time()-86400))
+        start_time = time.strftime(fmt, time.localtime(time.time() - 86400))
 
     if not end_time or not check_date_format(end_time):
         end_time = time.strftime(fmt, time.localtime())

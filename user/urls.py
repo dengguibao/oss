@@ -6,7 +6,6 @@ from .views import (
     user_delete_endpoint,
     list_user_info_endpoint,
     get_user_detail_endpoint,
-    verify_user_phone_endpoint,
     user_charge_endpoint,
     query_user_exist_endpoint,
     query_user_usage,
@@ -23,7 +22,6 @@ urlpatterns = [
     path('user/list_user', list_user_info_endpoint),
 
     path('user/detail', get_user_detail_endpoint),
-    path('user/phone_verify', verify_user_phone_endpoint),
     path('user/charge', user_charge_endpoint),
     path('user/query_exist', query_user_exist_endpoint),
     path('user/usage', query_user_usage),
