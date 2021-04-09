@@ -19,7 +19,6 @@ from common.func import verify_path, build_tmp_filename, file_iter, s3_client
 from .serializer import ObjectsSerialize
 from .models import Objects, ObjectAcl
 import hashlib
-import os
 
 
 @api_view(('POST',))
@@ -267,12 +266,12 @@ def put_object_endpoint(request):
         raise ParseError(detail='filename is too long')
 
     # 将用户上传的文件写入临时文件，生成md5，然后再分批写入后端rgw
-    temp_file = build_tmp_filename()
+    # temp_file = build_tmp_filename()
     md5 = hashlib.md5()
-    with open(temp_file, 'wb') as f:
-        for chunk in file.chunks():
-            md5.update(chunk)
-            f.write(chunk)
+    # with open(temp_file, 'wb') as f:
+    #     for chunk in file.chunks():
+    #         md5.update(chunk)
+    #         f.write(chunk)
 
     try:
         s3 = s3_client(b.bucket_region.reg_id, b.user.username)
@@ -290,38 +289,56 @@ def put_object_endpoint(request):
             file_key = root+filename
 
         # 利用s3接口进行数据上传至rgw
+        print(b.name)
         mp = s3.create_multipart_upload(
             Bucket=b.name,
             Key=file_key,
             ACL=permission
         )
-        with open(temp_file, 'rb') as fp:
-            n = 1
-            parts = []
-            while True:
-                data = fp.read(5 * 1024 ** 2)
-                if not data:
-                    break
-                x = s3.upload_part(
-                    Body=data,
-                    Bucket=b.name,
-                    ContentLength=len(data),
-                    Key=file_key,
-                    UploadId=mp['UploadId'],
-                    PartNumber=n
-                )
-                parts.append({
-                    'ETag': x['ETag'].replace('"', ''),
-                    'PartNumber': n
-                })
-                n += 1
-
-            d = s3.complete_multipart_upload(
+        n = 1
+        parts = []
+        for data in file.chunks():
+            md5.update(data)
+            x = s3.upload_part(
+                Body=data,
                 Bucket=b.name,
+                ContentLength=len(data),
                 Key=file_key,
                 UploadId=mp['UploadId'],
-                MultipartUpload={'Parts': parts}
+                PartNumber=n
             )
+            parts.append({
+                'ETag': x['ETag'].replace('"', ''),
+                'PartNumber': n
+            })
+            n += 1
+        # with open(temp_file, 'rb') as fp:
+        #     n = 1
+        #     parts = []
+        #     while True:
+        #         data = fp.read(5 * 1024 ** 2)
+        #         if not data:
+        #             break
+        #         x = s3.upload_part(
+        #             Body=data,
+        #             Bucket=b.name,
+        #             ContentLength=len(data),
+        #             Key=file_key,
+        #             UploadId=mp['UploadId'],
+        #             PartNumber=n
+        #         )
+        #         parts.append({
+        #             'ETag': x['ETag'].replace('"', ''),
+        #             'PartNumber': n
+        #         })
+        #         n += 1
+
+        d = s3.complete_multipart_upload(
+            Bucket=b.name,
+            Key=file_key,
+            UploadId=mp['UploadId'],
+            MultipartUpload={'Parts': parts}
+        )
 
         # 创建或更新数据库
         record_data = {
@@ -347,7 +364,7 @@ def put_object_endpoint(request):
             user_id=b.user.id if bucket_acl == 'public-read-write' else req_user.id,
         )
         # 删除临时文件
-        os.remove(temp_file)
+        # os.remove(temp_file)
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -378,18 +395,19 @@ def download_object_endpoint(request):
 
     s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.owner.username)
     tmp = build_tmp_filename()
-
-    with open(tmp, 'wb') as fp:
-        s3.download_fileobj(
-            Bucket=obj.bucket.name,
-            Key=obj.key,
-            Fileobj=fp
-        )
-
-    res = StreamingHttpResponse(file_iter(tmp))
-    res['Content-Type'] = 'application/octet-stream'
-    res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
-    return res
+    try:
+        with open(tmp, 'wb') as fp:
+            s3.download_fileobj(
+                Bucket=obj.bucket.name,
+                Key=obj.key,
+                Fileobj=fp
+            )
+        res = StreamingHttpResponse(file_iter(tmp))
+        res['Content-Type'] = 'application/octet-stream'
+        res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
+        return res
+    except Exception as e:
+        raise ParseError(str(e))
 
 
 @api_view(('PUT',))
