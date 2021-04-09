@@ -521,7 +521,7 @@ def query_user_exist_endpoint(request):
     phone = request.GET.get('phone', None)
     email = request.GET.get('email', None)
 
-    exist = True
+    exist = False
     try:
         if username:
             User.objects.get(username=username)
