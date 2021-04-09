@@ -65,12 +65,6 @@ def create_user_endpoint(request):
     if not isinstance(data, dict):
         raise ParseError(detail=data)
 
-    # if data['pwd1'] != data['pwd2']:
-    #     return Response({
-    #         'code': 1,
-    #         'msg': 'The two passwords are different'
-    #     })
-
     try:
         User.objects.get(username=data['username'])
     except User.DoesNotExist:
@@ -100,21 +94,14 @@ def create_user_endpoint(request):
             first_name=data['first_name'],
         )
 
-        p, created = Profile.objects.update_or_create(
-            user=user,
-            phone=data['phone']
-        )
+        p = user.profile
+        p.phone = data['phone']
         if is_subuser:
             p.is_subuser = True
             p.parent_uid = request.user.username
             p.save()
+        p.save()
 
-        # if not is_subuser:
-        Money.objects.create(
-            user=user,
-            amount=0.0
-        )
-        Token.objects.create(user=user)
     except Exception as e:
         raise ParseError(detail=str(e))
 
@@ -413,52 +400,6 @@ def get_user_detail_endpoint(request):
     })
 
 
-# @api_view(('POST',))
-# @verify_body
-# def verify_user_phone_endpoint(request):
-#     """
-#     验证用户注册时填写的手机号码，确认真实有效
-#     只有成功通过手机验证的用户才允许在ceph集群上创建对应的帐户
-#     :param request:
-#     :return:
-#     """
-#     if request.method == 'POST':
-#         fields = (
-#             ('*phone', str, verify_phone),
-#             ('*verify_code', str, (verify_length, 6))
-#         )
-#         data = verify_field(request.body, fields)
-#         if not isinstance(data, dict):
-#             raise ParseError(detail=data)
-#
-#         user = request.user
-#
-#         if user.profile.phone != data['phone'] or user.profile.phone_verify:
-#             raise ParseError(detail='phone number error or that user is already verification')
-#
-#         verify_code = cache.get('phone_verify_code_%s' % user.profile.phone)
-#         if not verify_code or data['verify_code'] != verify_code:
-#             raise ParseError(detail='verification code error')
-#
-#         cache.delete('phone_verify_code_%s' % user.profile.phone)
-#         uid, access_key, secret_key = build_ceph_userinfo(user.username)
-#         # print(uid,access_key,secret_key)
-#         p = Profile.objects.get(user=user)
-#         p.__dict__.update(
-#             **{
-#                 'phone_verify': True,
-#                 'access_key': access_key,
-#                 'secret_key': secret_key,
-#                 'ceph_uid': uid
-#             }
-#         )
-#         p.save()
-#         return Response({
-#             'code': 0,
-#             'msg': 'success',
-#         })
-
-
 @api_view(('GET',))
 @permission_classes((AllowAny,))
 def send_phone_verify_code_endpoint(request):
@@ -491,8 +432,8 @@ def user_charge_endpoint(request):
     :return:
     """
     req_user = request.user
-    if req_user.profile.is_subuser:
-        raise NotAuthenticated(detail='sub user can not charge')
+    # if req_user.profile.is_subuser:
+    #     raise NotAuthenticated(detail='sub user can not charge')
 
     fields = (
         ('*order_id', str, (verify_length, 10)),
@@ -503,14 +444,13 @@ def user_charge_endpoint(request):
     if not isinstance(data, dict):
         raise ParseError(detail=data)
 
-    user_money = Money.objects.get(user=req_user)
-    user_money.charge(data['money'])
-    current = user_money.amount
+    m = req_user.money.get()
+    m.charge(data['money'])
 
     return Response({
         'code': 0,
         'msg': 'success',
-        'amount': current
+        'amount': m.amount
     })
 
 
@@ -658,7 +598,7 @@ def cache_request_user_meta_info(token_key, request):
     ua = request.META.get('HTTP_USER_AGENT', 'unknown')
     remote_ip = get_client_ip(request)
     user = Token.objects.get(key=token_key).user
-
+    print(remote_ip)
     # write token extra info to cache
     cache.set('token_%s' % token_key, (ua, remote_ip, time.time(), user))
     # print(cache.get('token_%s' % token_key))

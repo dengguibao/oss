@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
 import time
 
 
@@ -49,14 +50,6 @@ class Capacity(models.Model):
         self.save()
 
 
-@receiver(post_save, sender=User)
-def handle_create_user(sender, instance, created, **kwargs):
-    if created:
-        Capacity.objects.create(user=instance)
-    # else:
-    #     Traffic.objects.filter(user=instance).update(**kwargs)
-
-
 class Money(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='money')
     amount = models.FloatField(verbose_name="account balance", default=0, blank=False)
@@ -71,3 +64,12 @@ class Money(models.Model):
             x = 0
         self.amount = x
         self.save()
+
+
+@receiver(post_save, sender=User)
+def handle_create_user(sender, instance, created, **kwargs):
+    if created:
+        Capacity.objects.create(user=instance)
+        Money.objects.create(user=instance)
+        Profile.objects.create(user=instance)
+        Token.objects.create(user=instance)
