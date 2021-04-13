@@ -5,6 +5,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.status import HTTP_201_CREATED, HTTP_200_OK
 from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
 from django.db.models import Q
+from rgwadmin.exceptions import NoSuchUser, NoSuchKey, NoSuchBucket
 from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
     verify_max_length, verify_body, verify_field,
@@ -296,6 +297,11 @@ def set_buckets_endpoint(request):
             rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
             # 删除数据记录
             bucket.delete()
+    except NoSuchKey:
+        raise ParseError('delete bucket failed, purge objects not found any key')
+
+    except NoSuchBucket:
+        raise ParseError('delete bucket failed, not found this bucket')
 
     except Exception as e:
         raise ParseError(detail=str(e))
