@@ -460,7 +460,6 @@ def set_bucket_acl_endpoint(request):
         acl_bid = request.GET.get('acl_bid', None)
 
         try:
-            print(acl_bid)
             b = BucketAcl.objects.get(acl_bid=int(acl_bid))
         except BucketAcl.DoesNotExist:
             raise ParseError('not found resource')
