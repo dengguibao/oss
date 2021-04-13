@@ -337,7 +337,7 @@ def put_object_endpoint(request):
             )
         n = 1
         parts = []
-        for data in file.chunks():
+        for data in file.chunks(chunk_size=5*1024**2):
             md5.update(data)
             x = s3.upload_part(
                 Body=data,
