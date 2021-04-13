@@ -7,9 +7,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
+from requests.exceptions import ConnectionError
 from django.db.models import Q
 from objects.models import Objects
-# from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
@@ -394,9 +394,27 @@ def get_user_detail_endpoint(request):
     ser = UserDetailSerialize(u)
     ser_data = ser.data
     ser_data['bucket'] = b
-    ser_data['objects'] = {
-        'count': Objects.objects.filter(owner=request.user, type='f').count()
-    }
+    # ser_data['objects'] = {
+    #     'count': Objects.objects.filter(owner=request.user, type='f').count()
+    # }
+    ser_data['ceph'] = []
+    region = BucketRegion.objects.all()
+
+    for i in region:
+        rgw = rgw_client(i.reg_id)
+        try:
+            x = rgw.get_user(uid=request.user.profile.ceph_uid, stats=True)
+            ser_data['ceph'].append({
+                'region': i.name,
+                'quota': x['user_quota'],
+                'stats': x['stats']
+            })
+            # ser_data['ceph'][i.name]['stats'] = x
+        except ConnectionError:
+            continue
+        except NoSuchUser:
+            continue
+
     return Response({
         'code': 0,
         'msg': 'success',
@@ -520,13 +538,15 @@ def query_user_usage(request):
             rgw.get_user(uid=req_user.profile.ceph_uid)
         except NoSuchUser:
             continue
+        except ConnectionError:
+            continue
         # print(start_time, end_time, u.profile.ceph_uid)
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,
             start=start_time,
             end=end_time,
             show_summary=True,
-            show_entries=True
+            # show_entries=True
         )
         usage_data.append({
             'region': i.name,

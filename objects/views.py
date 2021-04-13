@@ -11,6 +11,7 @@ from django.contrib.auth.models import AnonymousUser
 from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from django.contrib.auth.models import User
+from botocore.exceptions import ClientError
 from common.verify import (
     verify_body, verify_object_name,
     verify_field, verify_object_path,
@@ -433,8 +434,8 @@ def download_object_endpoint(request):
         res['Content-Type'] = 'application/octet-stream'
         res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
         return res
-    except Exception as e:
-        raise ParseError(str(e))
+    except ClientError:
+        raise NotFound('not found object from ceph')
 
 
 @api_view(('PUT',))
