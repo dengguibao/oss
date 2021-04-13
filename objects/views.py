@@ -137,7 +137,7 @@ def delete_object_endpoint(request):
             raise NotAuthenticated('current user not permission pub object')
 
     try:
-        s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.username)
+        s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.user.username)
         delete_list = []
         # 如果删除的对象为目录，则删除该目录下的所有一切对象
         if o.type == 'd':
@@ -420,7 +420,7 @@ def download_object_endpoint(request):
         if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
             raise NotAuthenticated('current user not permission download the object')
 
-    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.username)
+    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
     tmp = build_tmp_filename()
     try:
         with open(tmp, 'wb') as fp:
