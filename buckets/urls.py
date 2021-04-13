@@ -6,8 +6,9 @@ from .views import (
     query_bucket_name_exist_endpoint,
     get_bucket_detail_endpoint,
     set_bucket_region_endpoint,
+    set_bucket_perm_endpoint,
+    query_bucket_perm_endpoint,
     set_bucket_acl_endpoint,
-    query_bucket_acl_endpoint
 )
 
 urlpatterns = [
@@ -16,6 +17,7 @@ urlpatterns = [
     path('buckets/bucket', set_buckets_endpoint),
     path('buckets/query_exist', query_bucket_name_exist_endpoint),
     path('buckets/detail', get_bucket_detail_endpoint),
-    path('buckets/set_acl', set_bucket_acl_endpoint),
-    path('buckets/query_acl', query_bucket_acl_endpoint),
+    path('buckets/set_perm', set_bucket_perm_endpoint),
+    path('buckets/query_perm', query_bucket_perm_endpoint),
+    path('buckets/acl', set_bucket_acl_endpoint),
 ]

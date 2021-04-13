@@ -11,7 +11,6 @@ from .views import (
     query_user_usage,
     set_capacity_endpoint,
     send_phone_verify_code_endpoint,
-    __GRANT_SUPERUSER_ENDPOINT__,
 )
 
 urlpatterns = [
@@ -28,6 +27,4 @@ urlpatterns = [
 
     path('user/send_verify_code', send_phone_verify_code_endpoint),
     path('user/capacity', set_capacity_endpoint),
-
-    path('user/__GRANT__', __GRANT_SUPERUSER_ENDPOINT__)
 ]

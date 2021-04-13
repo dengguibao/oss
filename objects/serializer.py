@@ -10,6 +10,7 @@ class ObjectsSerialize(ModelSerializer):
     cn_type = SerializerMethodField()
     key_url = SerializerMethodField()
     root_url = SerializerMethodField()
+    permission = SerializerMethodField()
 
     def get_root_url(self, obj):
         return obj.root.replace('/', ',') if obj.root else None
@@ -24,11 +25,20 @@ class ObjectsSerialize(ModelSerializer):
             return "文件"
         return "未知"
 
+    def get_permission(self, obj):
+        data = {
+            'private': '私有',
+            'public-read': '公开读',
+            'public-read-write': '公开读写',
+            'authenticated': '授权读写'
+        }
+        return data[obj.permission] if obj.permission in data else 'unknow'
+
     class Meta:
         model = Objects
         fields = (
             'name', 'bucket', 'obj_id', 'type',
             'root', 'file_size', 'md5', 'etag', 'owner',
             'upload_time', "cn_type", 'key', 'key_url',
-            'root_url'
+            'root_url', 'permission'
         )

@@ -10,10 +10,11 @@ from django.http import StreamingHttpResponse
 from django.contrib.auth.models import AnonymousUser
 from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
+from django.contrib.auth.models import User
 from common.verify import (
     verify_body, verify_object_name,
     verify_field, verify_object_path,
-    verify_bucket_name, verify_pk, verify_in_array
+    verify_bucket_name, verify_pk, verify_in_array, verify_username
 )
 from common.func import verify_path, build_tmp_filename, file_iter, s3_client
 from .serializer import ObjectsSerialize
@@ -41,13 +42,23 @@ def create_directory_endpoint(request):
     except Buckets.DoesNotExist:
         raise NotFound(detail='not fount this bucket')
 
-    bucket_acl = b.bucket_acl.get().permission
+    bucket_perm = b.permission
 
-    if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
-        raise NotAuthenticated(detail='this bucket access policy is not public read write')
+    if bucket_perm != 'public-read-write':
+        if isinstance(req_user, AnonymousUser):
+            raise NotAuthenticated(detail='anonymous user can not access this bucket')
 
-    if bucket_acl != 'public-read-write' and req_user.id != b.user_id:
-        raise ParseError(detail='bucket and user not match')
+    if bucket_perm == 'private':
+        if req_user.id != b.user_id:
+            raise ParseError(detail='bucket and user not match')
+
+    if bucket_perm == 'authenticated':
+        allow_user_list = BucketAcl.objects. \
+            filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
+            values_list('acl_bid')
+        # 在授权列表内，或者桶的拥有者均可以写操作
+        if req_user.id not in allow_user_list and req_user != b.user:
+            raise NotAuthenticated('current user not permission create directory')
 
     try:
         if 'path' in data:
@@ -74,24 +85,10 @@ def create_directory_endpoint(request):
             'type': 'd',
             'key': key,
             'root': data['path'] if 'path' in data else None,
-            'owner': b.user if bucket_acl == 'public-read-write' else req_user
+            # 后端s3使用桶角色对应的ceph uid写入ceph rgw，本地数据库上传者本身
+            'owner': b.user if bucket_perm == 'public-read-write' else req_user
         }
         Objects.objects.create(**record_data)
-
-        # if b.version_control:
-        #     Objects.objects.create(**record_data)
-        # else:
-        #     Objects.objects.update_or_create(**record_data)
-        # Objects.objects.update_or_create(
-        #     name=data['folder_name'] + '/',
-        #     bucket=b,
-        #     etag=d['ETag'] if 'ETag' in d else None,
-        #     version_id=d['VersionId'] if 'VersionId' in d else None,
-        #     type='d',
-        #     key=key,
-        #     root=data['path'] if 'path' in data else None,
-        #     owner=req_user
-        # )
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -113,18 +110,34 @@ def delete_object_endpoint(request):
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
+    # 删除文件仅需要具有当前文件对象的权限
     if o.type == 'f':
-        object_acl = o.object_acl.get().permission
+        obj_perm = o.permission
+    # 删除目录需要具有桶权限
+    elif o.type == 'd':
+        obj_perm = o.bucket.permission
+    else:
+        obj_perm = 'unknown'
 
-    if o.type == 'd':
-        object_acl = o.bucket.bucket_acl.get().permission
+    if obj_perm != 'public-read-write':
+        if isinstance(req_user, AnonymousUser):
+            raise NotAuthenticated('anonymous user dont allow delete this file or directory')
 
-    if (isinstance(req_user, AnonymousUser) and object_acl != 'public-read-write') or \
-            object_acl != 'public-read-write' and o.owner != req_user:
-        raise NotAuthenticated(detail='permission denied')
+    if obj_perm == 'private':
+        # 桶拥有者、文件对象拥有者
+        if req_user != o.owner and req_user != o.bucket.user:
+            raise NotAuthenticated(detail='permission denied')
+
+    if obj_perm == 'authenticated':
+        allow_user_list = BucketAcl.objects. \
+            filter(bucket_id=o.bucket_id, permission='authenticated-read-write'). \
+            values_list('acl_bid')
+        # 桶拥有者、已授权用户、文件对象拥有者
+        if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
+            raise NotAuthenticated('current user not permission pub object')
 
     try:
-        s3 = s3_client(o.bucket.bucket_region.reg_id, req_user.username)
+        s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.username)
         delete_list = []
         # 如果删除的对象为目录，则删除该目录下的所有一切对象
         if o.type == 'd':
@@ -134,6 +147,7 @@ def delete_object_endpoint(request):
             delete_list.append(
                 (o.obj_id, o.key)
             )
+            # 删除目录则需要删除以提指定路程径开头的所有对象
             for i in Objects.objects.filter(root__startswith=key, owner=req_user, bucket=o.bucket).all():
                 delete_list.append(
                     (i.obj_id, i.key)
@@ -173,13 +187,24 @@ def list_objects_endpoint(request):
         b = Buckets.objects.get(name=bucket_name)
     except Buckets.DoesNotExist:
         raise NotFound(detail='not found bucket')
-    bucket_acl = b.bucket_acl.get().permission
-    if isinstance(req_user, AnonymousUser) and 'public' not in bucket_acl:
-        raise NotAuthenticated(detail='this bucket access policy is private')
 
-    # print(b.user, req_user)
-    if b.user != req_user and 'public' not in bucket_acl:
-        raise NotAuthenticated(detail='bucket owner not match')
+    bucket_perm = b.permission
+
+    if bucket_perm not in ('public-read', 'public-read-write'):
+        if isinstance(req_user, AnonymousUser):
+            raise NotAuthenticated('this bucket acl is not contain public')
+
+    if bucket_perm == 'private':
+        if req_user != b.user:
+            raise NotAuthenticated(detail='current user is not of the bucket owner')
+
+    if bucket_perm == 'authenticated':
+        allow_write_user_list = BucketAcl.objects. \
+            filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
+            values_list('acl_bid')
+        # 已授权用户和桶拥有者可以列出文件
+        if req_user.id not in allow_write_user_list and req_user != b.user:
+            raise NotAuthenticated('current user not permission pub object')
 
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
@@ -237,20 +262,32 @@ def put_object_endpoint(request):
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
     except Buckets.DoesNotExist:
-        raise NotFound(detail='not found this bucket')
+        raise NotFound('not found this bucket')
 
-    bucket_acl = b.bucket_acl.get().permission
+    bucket_perm = b.permission
 
-    if b.user != req_user and 'public-read-write' != bucket_acl:
-        raise NotAuthenticated(detail='bucket owner not match')
+    if bucket_perm != 'public-read-write':
+        if isinstance(req_user, AnonymousUser):
+            raise NotAuthenticated('this bucket access ACL is not contain public-read-write')
 
-    if isinstance(req_user, AnonymousUser) and bucket_acl != 'public-read-write':
-        raise NotAuthenticated(detail='this bucket access ACL is not contain public-read-write')
+    if bucket_perm == 'private':
+        if req_user != b.user:
+            raise NotAuthenticated(detail='current user is not of the bucket owner')
 
-    object_acl = ('private', 'public-read', 'public-read-write')
+    if bucket_perm == 'authenticated':
+        allow_write_user_list = BucketAcl.objects.\
+            filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
+            values_list('acl_bid')
+        # 桶拥有者、已授权用户
+        if req_user.id not in allow_write_user_list and req_user != b.user:
+            raise NotAuthenticated('current user not permission pub object')
 
-    if not permission or permission not in object_acl:
-        permission = BucketAcl.objects.get(bucket=b).permission
+    object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
+
+    if permission is None:
+        permission = b.permission
+    if permission not in object_allow_acl:
+        raise ParseError('permission value has wrong!')
 
     # 验证路程是否为非常路径（目录）
     p = False
@@ -258,23 +295,20 @@ def put_object_endpoint(request):
         path = path.replace(',', '/')
         p = verify_path(path)
 
-    if p and p.owner != req_user and p.bucket.name != bucket_name:
+    if p and p.bucket.name != bucket_name:
         raise ParseError(detail='illegal path')
 
     # 验证文件名是否超长
     if len(filename) > 1024:
         raise ParseError(detail='filename is too long')
 
-    # 将用户上传的文件写入临时文件，生成md5，然后再分批写入后端rgw
-    # temp_file = build_tmp_filename()
     md5 = hashlib.md5()
-    # with open(temp_file, 'wb') as f:
-    #     for chunk in file.chunks():
-    #         md5.update(chunk)
-    #         f.write(chunk)
 
     try:
-        s3 = s3_client(b.bucket_region.reg_id, b.user.username)
+        s3 = s3_client(
+            b.bucket_region.reg_id,
+            b.user.username
+        )
         if p:
             root = path
         else:
@@ -289,12 +323,18 @@ def put_object_endpoint(request):
             file_key = root+filename
 
         # 利用s3接口进行数据上传至rgw
-        print(b.name)
-        mp = s3.create_multipart_upload(
-            Bucket=b.name,
-            Key=file_key,
-            ACL=permission
-        )
+        if 'authenticated' not in permission:
+            mp = s3.create_multipart_upload(
+                Bucket=b.name,
+                Key=file_key,
+                ACL=permission
+            )
+        else:
+            mp = s3.create_multipart_upload(
+                Bucket=b.name,
+                Key=file_key,
+                # ACL=permission
+            )
         n = 1
         parts = []
         for data in file.chunks():
@@ -312,26 +352,6 @@ def put_object_endpoint(request):
                 'PartNumber': n
             })
             n += 1
-        # with open(temp_file, 'rb') as fp:
-        #     n = 1
-        #     parts = []
-        #     while True:
-        #         data = fp.read(5 * 1024 ** 2)
-        #         if not data:
-        #             break
-        #         x = s3.upload_part(
-        #             Body=data,
-        #             Bucket=b.name,
-        #             ContentLength=len(data),
-        #             Key=file_key,
-        #             UploadId=mp['UploadId'],
-        #             PartNumber=n
-        #         )
-        #         parts.append({
-        #             'ETag': x['ETag'].replace('"', ''),
-        #             'PartNumber': n
-        #         })
-        #         n += 1
 
         d = s3.complete_multipart_upload(
             Bucket=b.name,
@@ -351,20 +371,14 @@ def put_object_endpoint(request):
             'md5': md5.hexdigest(),
             'etag': d['ETag'] if 'ETag' in d else None,
             'version_id': d['VersionId'] if 'VersionId' in d else None,
-            'owner_id': b.user.id if bucket_acl == 'public-read-write' else req_user.id
+            'owner_id': b.user.id if bucket_perm == 'public-read-write' else req_user.id,
         }
         if b.version_control:
-            upload_obj = Objects.objects.create(**record_data)
+            o = Objects.objects.create(**record_data)
         else:
-            upload_obj, create = Objects.objects.update_or_create(**record_data)
-
-        ObjectAcl.objects.update_or_create(
-            object=upload_obj,
-            permission=permission,
-            user_id=b.user.id if bucket_acl == 'public-read-write' else req_user.id,
-        )
-        # 删除临时文件
-        # os.remove(temp_file)
+            o, _ = Objects.objects.update_or_create(**record_data)
+        o.permission = permission
+        o.save()
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -384,16 +398,29 @@ def download_object_endpoint(request):
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
-    obj_perm = obj.object_acl.get().permission
+    if obj.type == 'd':
+        raise ParseError('download object is a directory')
+
+    obj_perm = obj.permission
 
     # 判断资源是否为公共可读
-    if 'public' not in obj_perm and isinstance(request.user, AnonymousUser):
-        raise NotAuthenticated(detail='this resource is private')
+    if 'public' not in obj_perm:
+        if isinstance(request.user, AnonymousUser):
+            raise NotAuthenticated(detail='this resource is not public-read-write')
 
-    if ('public' not in obj_perm and obj.owner != request.user) or obj.type == 'd':
-        raise ParseError(detail='this file owner is not of you or download object is directory')
+    if obj_perm == 'private':
+        if obj.owner != request.user and request.user != obj.bucket.user:
+            raise ParseError(detail='this file object owner is not of you')
 
-    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.owner.username)
+    if obj_perm == 'authenticated':
+        allow_user_list = ObjectAcl.objects.\
+            filter(object_id=obj.obj_id, permission__startswith='authenticated-read'). \
+            values_list('acl_oid')
+        # 桶拥有者、已授权、文件拥有者
+        if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
+            raise NotAuthenticated('current user not permission download the object')
+
+    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.username)
     tmp = build_tmp_filename()
     try:
         with open(tmp, 'wb') as fp:
@@ -411,10 +438,10 @@ def download_object_endpoint(request):
 
 
 @api_view(('PUT',))
-def set_object_acl_endpoint(request):
+def set_object_perm_endpoint(request):
     fields = (
         ('*obj_id', int, (verify_pk, Objects)),
-        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write')))
+        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
     data = verify_field(request.data, fields)
     if not isinstance(data, dict):
@@ -422,19 +449,31 @@ def set_object_acl_endpoint(request):
 
     o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=data['obj_id'])
 
-    if o.owner != request.user and o.bucket.user != request.user:
-        raise NotAuthenticated(detail='user and bucket owner and object owner not match')
+    if o.type == 'd':
+        raise ParseError('object is a directory')
+
+    if o.permission == 'private':
+        if o.owner != request.user and o.bucket.user != request.user:
+            raise NotAuthenticated('user and bucket or user and object ACL not match')
+
+    if o.permission == 'authenticated':
+        allow_user_list = ObjectAcl.objects.\
+            filter(object_id=o.obj_id, permission='authenticated-read-write'). \
+            values_list('acl_oid')
+        # 已授权列表、桶归属者、文件对象归属者
+        if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
+            raise NotAuthenticated('you are not in the allow access list')
 
     try:
-        s3 = s3_client(o.bucket.bucket_region.reg_id, request.user.username)
-        s3.put_object_acl(
-            ACL=data['permission'],
-            Bucket=o.bucket.name,
-            Key=o.key
-        )
-        o_acl = o.object_acl.get()
-        o_acl.permission = data['permission']
-        o_acl.save()
+        if 'authenticated' not in data['permission']:
+            s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.user.username)
+            s3.put_object_acl(
+                ACL=data['permission'],
+                Bucket=o.bucket.name,
+                Key=o.key
+            )
+        o.permission = data['permission']
+        o.save()
     except Exception as e:
         raise ParseError(detail=str(e))
 
@@ -445,25 +484,140 @@ def set_object_acl_endpoint(request):
 
 
 @api_view(('GET',))
-def query_object_acl_endpoint(request):
+def query_object_perm_endpoint(request):
     obj_id = request.GET.get('obj_id', None)
     try:
         o = Objects.objects.get(obj_id=int(obj_id))
     except Objects.DoesNotExist:
         raise NotFound(detail='not found object')
 
-    b = o.bucket
-    bucket_acl = b.bucket_acl.get().permission
-    object_acl = o.object_acl.get().permission
+    if o.type == 'd':
+        raise ParseError('object is a directory')
 
-    if 'public' not in bucket_acl and isinstance(request.user, AnonymousUser):
-        raise NotAuthenticated(detail='bucket access permission not contain public-read or public-read-write')
+    # if 'public' not in o.permission:
+    #     if isinstance(request.user, AnonymousUser):
+    #         raise NotAuthenticated(detail='bucket access permission not contain public-read or public-read-write')
 
-    if 'public' not in bucket_acl and request.user != o.owner and request.user != b.user:
-        raise NotAuthenticated(detail='object and owner not match')
+    if o.permission == 'private':
+        if request.user != o.owner and request.user != o.bucket.user:
+            raise NotAuthenticated(detail='object and owner not match')
+
+    if o.permission == 'authenticated':
+        allow_user_list = ObjectAcl.objects. \
+            filter(object_id=o.obj_id, permission__startswith='authenticated-read'). \
+            values_list('acl_oid')
+        # 桶拥有者、文件对象拥有者、已授权
+        if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
+            raise NotAuthenticated('current user do not allow query this object permission')
 
     return Response({
         'code': 0,
         'msg': 'success',
-        'permission': object_acl
+        'permission': o.permission
     })
+
+
+@api_view(('POST', 'GET', 'DELETE'))
+def set_object_acl_endpoint(request):
+    """
+    授权某个用户对桶内指定资源的对象的访问权限
+    权限仅支持 认证读、认证读写
+    """
+    req_user = request.user
+    if request.method == 'GET':
+        bid = request.GET.get('obj_id', None)
+
+        try:
+            o = Objects.objects.get(obj_id=int(bid))
+            res = ObjectAcl.objects.select_related('user').filter(object=o).values(
+                'user__first_name', 'user__username', 'permission', 'acl_oid', 'object__name'
+            )
+        except Objects.DoesNotExist:
+            raise ParseError('not found this file object')
+        except ObjectAcl.DoesNotExist:
+            raise ParseError('not found object acl')
+
+        if o.permission == 'private':
+            if o.owner != req_user and o.bucket.user != req_user:
+                raise ParseError('file object is private')
+
+        if o.permission == 'authenticated':
+            allow_user = BucketAcl.objects.filter(
+                bucket_id=o.bucket_id,
+                permission='authenticated-read-write'
+            ).values_list('acl_bid')
+            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+                raise ParseError('current user is not in allow access list')
+
+        return Response({
+            'code': 0,
+            'msg': 'success',
+            'data': list(res)
+        })
+
+    if request.method == 'POST':
+        fields = (
+            ('*obj_id', int, (verify_pk, Objects)),
+            ('*username', str, verify_username),
+            ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
+        )
+        data = verify_field(request.body, fields)
+        if not isinstance(data, dict):
+            raise ParseError(data)
+        try:
+            o = Objects.objects.get(obj_id=int(data['obj_id']))
+            user = User.objects.get(username=data['username'])
+        except Objects.DoesNotExist:
+            raise ParseError('not found this bucket')
+        except User.DoesNotExist:
+            raise ParseError('not found this user')
+
+        if o.permission == 'private':
+            if o.owner != req_user and o.bucket.user != req_user:
+                raise ParseError('file object is private')
+
+        if o.permission == 'authenticated':
+            allow_user = BucketAcl.objects.filter(
+                bucket_id=o.bucket_id,
+                permission='authenticated-read-write'
+            ).values_list('acl_bid')
+            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+                raise ParseError('current user is not in allow access list')
+
+        ObjectAcl.objects.update_or_create(
+            object=o,
+            user=user,
+            permission=data['permission']
+        )
+
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        }, status=HTTP_201_CREATED)
+
+    if request.method == 'DELETE':
+        acl_oid = request.GET.get('acl_oid', None)
+
+        try:
+            o = ObjectAcl.objects.get(acl_oid=int(acl_oid))
+        except ObjectAcl.DoesNotExist:
+            raise ParseError('not found resource')
+
+        if o.permission == 'private':
+            if o.owner != req_user and o.bucket.user != req_user:
+                raise ParseError('file object is private')
+
+        if o.permission == 'authenticated':
+            allow_user = BucketAcl.objects.filter(
+                bucket_id=o.bucket_id,
+                permission='authenticated-read-write'
+            ).values_list('acl_bid')
+            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+                raise ParseError('current user is not in allow access list')
+
+        o.delete()
+
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        })

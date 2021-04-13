@@ -35,6 +35,7 @@ class Buckets(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user', null=True, blank=True)
     start_time = models.IntegerField(verbose_name='start time', blank=False, default=0)
     version_control = models.BooleanField(verbose_name="version control", default=False, blank=False)
+    permission = models.CharField(max_length=50, blank=False, default='private')
     # bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True)
     bucket_region = models.ForeignKey(BucketRegion, on_delete=models.SET_NULL, null=True, blank=True)
     state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False)

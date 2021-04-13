@@ -9,8 +9,9 @@ from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
     verify_max_length, verify_body, verify_field,
     verify_bucket_name, verify_max_value, verify_pk,
-    verify_true_false, verify_in_array
+    verify_true_false, verify_in_array, verify_username
 )
+from django.contrib.auth.models import User
 from common.func import rgw_client, s3_client
 from .serializer import BucketSerialize
 import time
@@ -248,8 +249,8 @@ def set_buckets_endpoint(request):
             if query_bucket_exist(data['name']):
                 raise ParseError(detail='the bucket is already exist!')
             # 判断容量是否足够
-            t = request.user.capacity
-            if not t or not t.calculate_valid_date():
+            q = request.user.quota
+            if not q or not q.calculate_valid_date():
                 raise ParseError(detail='user capacity not enough')
 
             data['user_id'] = req_user.id
@@ -274,19 +275,14 @@ def set_buckets_endpoint(request):
 
             # 本地数据库插入记录
 
-            bucket_obj = model.objects.create(
+            model.objects.create(
                 name=data['name'],
                 bucket_region_id=data['bucket_region_id'],
                 version_control=data['version_control'],
                 user=req_user,
+                permission=data['permission'],
                 start_time=int(time.time()),
                 state='e'
-            )
-
-            BucketAcl.objects.create(
-                permission=data['permission'],
-                user=req_user,
-                bucket_id=bucket_obj.pk
             )
 
         if request.method == 'DELETE':
@@ -348,10 +344,10 @@ def get_bucket_detail_endpoint(request):
 
 
 @api_view(('PUT',))
-def set_bucket_acl_endpoint(request):
+def set_bucket_perm_endpoint(request):
     fields = (
         ('*bucket_id', int, (verify_pk, Buckets)),
-        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write')))
+        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
     data = verify_field(request.data, fields)
     if not isinstance(data, dict):
@@ -359,14 +355,17 @@ def set_bucket_acl_endpoint(request):
 
     b = Buckets.objects.select_related('bucket_region').get(bucket_id=data['bucket_id'])
 
-    if b.user != request.user:
-        raise NotAuthenticated(detail='user and bucket not match')
+    if request.user != b.user:
+        raise NotAuthenticated(detail='bucket and user not match')
+
     try:
-        s3 = s3_client(b.bucket_region.reg_id, request.user.username)
-        s3.put_bucket_acl(
-            ACL=data['permission'],
-            Bucket=b.name
-        )
+        # 该权限s3上没有
+        if 'authenticated' != data['permission']:
+            s3 = s3_client(b.bucket_region.reg_id, b.user.username)
+            s3.put_bucket_acl(
+                ACL=data['permission'],
+                Bucket=b.name
+            )
         b_acl = b.bucket_acl.get()
         b_acl.permission = data['permission']
         b_acl.save()
@@ -380,14 +379,12 @@ def set_bucket_acl_endpoint(request):
 
 
 @api_view(('GET',))
-def query_bucket_acl_endpoint(request):
+def query_bucket_perm_endpoint(request):
     bucket_id = request.GET.get('bucket_id', None)
     try:
         b = Buckets.objects.get(bucket_id=bucket_id)
     except Buckets.DoesNotExist:
         raise NotFound(detail='not found bucket')
-
-    bucket_acl = b.bucket_acl.get().permission
 
     if request.user != b.user:
         raise NotAuthenticated(detail='bucket and user not match')
@@ -395,8 +392,87 @@ def query_bucket_acl_endpoint(request):
     return Response({
         'code': 0,
         'msg': 'success',
-        'permission': bucket_acl
+        'permission': b.permission
     })
+
+
+@api_view(('POST', 'GET', 'DELETE'))
+def set_bucket_acl_endpoint(request):
+    """
+    授权某个用户对指定桶内所有资源的对象的访问权限
+    权限仅支持 认证读、认证读写
+    """
+    req_user = request.user
+    if request.method == 'GET':
+        bid = request.GET.get('bucket_id', None)
+
+        try:
+            b = Buckets.objects.get(bucket_id=int(bid))
+            res = BucketAcl.objects.select_related('user').select_related('bucket').filter(bucket=b).values(
+                'user__first_name', 'user__username', 'bucket__name', 'permission', 'acl_bid'
+            )
+        except Buckets.DoesNotExist:
+            raise ParseError('not found this bucket')
+        except BucketAcl.DoesNotExist:
+            raise ParseError('not found resource')
+
+        if b.user != req_user:
+            raise NotAuthenticated('user and bucket__user not match')
+
+        return Response({
+            'code': 0,
+            'msg': 'success',
+            'data': list(res)
+        })
+
+    if request.method == 'POST':
+        fields = (
+            ('*bucket_id', int, (verify_pk, Buckets)),
+            ('*username', str, verify_username),
+            ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
+        )
+        data = verify_field(request.body, fields)
+        if not isinstance(data, dict):
+            raise ParseError(data)
+        try:
+            bucket = Buckets.objects.get(bucket_id=int(data['bucket_id']))
+            user = User.objects.get(username=data['username'])
+        except Buckets.DoesNotExist:
+            raise ParseError('not found this bucket')
+        except User.DoesNotExist:
+            raise ParseError('not found this user')
+
+        if req_user != bucket.user:
+            raise ParseError('bucket__user and user not match')
+
+        BucketAcl.objects.update_or_create(
+            bucket=bucket,
+            user=user,
+            permission=data['permission']
+        )
+
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        }, status=HTTP_201_CREATED)
+
+    if request.method == 'DELETE':
+        acl_bid = request.GET.get('acl_bid', None)
+
+        try:
+            print(acl_bid)
+            b = BucketAcl.objects.get(acl_bid=int(acl_bid))
+        except BucketAcl.DoesNotExist:
+            raise ParseError('not found resource')
+
+        if b.bucket.user != req_user:
+            raise NotAuthenticated('user and bucket__user not match')
+
+        b.delete()
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        })
 
 
 def query_bucket_exist(name):
@@ -406,16 +482,3 @@ def query_bucket_exist(name):
         return False
     else:
         return True
-
-# def get_offset_value(code):
-#     try:
-#         v = Offset.objects.get(code=code)
-#     except:
-#         return False
-#     else:
-#         return v.get_offset_value()
-#
-#
-# def update_off_code(code):
-#     v = Offset.objects.get(code=code)
-#     v.use_offset_code()

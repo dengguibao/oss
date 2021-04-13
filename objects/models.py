@@ -19,6 +19,7 @@ class Objects(models.Model):
     etag = models.CharField(verbose_name='s3 etag', max_length=50, blank=True, null=True)
     key = models.CharField(verbose_name='keys', max_length=4096, blank=True, null=True)
     version_id = models.CharField(verbose_name='version id', max_length=50, blank=True, null=True)
+    permission = models.CharField(max_length=50, blank=False, default='private')
     owner = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True, related_name="object_owner")
     upload_time = models.DateTimeField(auto_now=True)
 

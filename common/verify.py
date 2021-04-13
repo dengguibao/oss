@@ -23,7 +23,10 @@ def verify_field(data: bytes, field: tuple):
     通过则返回包含字段中的key的字典，否则返回未验证通过的信息
     """
     if isinstance(data, bytes):
-        data = json.loads(data.decode())
+        try:
+            data = json.loads(data.decode())
+        except AttributeError:
+            return 'request body is not a json'
 
     if isinstance(data, dict):
         pass

@@ -8,18 +8,19 @@ from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
 from django.db.models import Q
-from django.forms.models import model_to_dict
+from objects.models import Objects
+# from django.forms.models import model_to_dict
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
 from common.verify import (
     verify_field, verify_mail, verify_username,
     verify_phone, verify_body, verify_length,
-    verify_max_length, verify_max_value, verify_pk
+    verify_max_length, verify_max_value
 )
 from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_phone_verify_code
-from .serializer import UserSerialize
-from .models import Profile, Money, Capacity
+from .serializer import UserSerialize, UserDetailSerialize
+from .models import Profile, Money, Quota
 from rgwadmin.exceptions import NoSuchUser
 
 import time
@@ -31,25 +32,25 @@ import time
 def create_user_endpoint(request):
     """
     创建用户
-    请求参数is_subuser为1时则创建子用户
+    请求参数sub_user为1时则创建子用户
     创建子用户只能是一个已经登陆的普通用户
     :param request:
     :return:
     """
     try:
-        is_subuser = int(request.GET.get('is_subuser', 0))
+        sub_user = int(request.GET.get('sub_user', False))
     except ValueError:
-        is_subuser = 0
+        sub_user = 0
 
-    is_subuser = True if is_subuser == 1 else False
+    sub_user = True if sub_user == 1 else False
 
     req_user = request.user
 
-    if is_subuser and isinstance(req_user, AnonymousUser):
+    if sub_user and isinstance(req_user, AnonymousUser):
         raise ParseError(detail='create sub user need a already exist user')
 
-    # if not isinstance(req_user, AnonymousUser) and not request.user.profile.is_subuser:
-    #     raise ParseError(detail='illegal request, only normal user can be create sub user')
+    if sub_user and not isinstance(req_user, AnonymousUser) and req_user.profile.level >= 3:
+        raise ParseError('sub user already max level')
 
     fields = (
         ('*username', str, verify_username),
@@ -96,9 +97,11 @@ def create_user_endpoint(request):
 
         p = user.profile
         p.phone = data['phone']
-        if is_subuser:
+        if sub_user:
             p.is_subuser = True
             p.parent_uid = request.user.username
+            p.root_uid = request.user.profile.root_uid
+            p.level = request.user.profile.level+1
             p.save()
         p.save()
 
@@ -187,6 +190,8 @@ def user_login_endpoint(request):
             'phone_verify': user.profile.phone_verify,
             'phone_number': user.profile.phone,
             'user_type': 'superuser' if user.is_superuser else 'normal',
+            'is_subuser': user.profile.is_subuser,
+            'level': user.profile.level,
         }
     })
 
@@ -316,9 +321,10 @@ def list_user_info_endpoint(request):
             users = User.objects.select_related('profile').all()
     else:
         username = req_user.username
-        users = User.objects.select_related('profile').select_related('capacity').filter(
+        users = User.objects.select_related('profile').select_related('quota').filter(
             Q(username=username) |
-            Q(profile__parent_uid=username)
+            Q(profile__parent_uid=username) |
+            Q(profile__root_uid=username)
         )
 
     try:
@@ -357,18 +363,14 @@ def get_user_detail_endpoint(request):
     列出某个用户的所有详细信息
     超级管理员可以查看所有用户的信息，普通用户可以查看对应的子帐户信息
     :param request:
-    :param user_id:
     :return:
     """
     # u = User.objects.get(pk=user_id)
 
     try:
         user_id = request.GET.get('user_id', None)
-        if int(user_id):
-            u = User.objects.get(pk=user_id)
-            p = Profile.objects.get(user=u)
-            m = Money.objects.get(user=u)
-            b = Buckets.objects.filter(user=u)
+        u = User.objects.select_related('profile').select_related('quota').select_related('money').get(id=user_id)
+        b = Buckets.objects.filter(user=user_id).values()
     except Profile.DoesNotExist:
         raise ParseError(detail='not found user profile')
     except Money.DoesNotExist:
@@ -383,20 +385,22 @@ def get_user_detail_endpoint(request):
             u.profile.parent_uid != req_username:
         raise NotAuthenticated(detail='permission denied!')
 
-    u_d = model_to_dict(u)
-    p_d = model_to_dict(p)
-    m_d = model_to_dict(m)
+    # u_d = model_to_dict(u)
+    # p_d = model_to_dict(p)
+    # m_d = model_to_dict(m)
+    #
+    # del u_d['password'], m_d['id'], p_d['id']
 
-    del u_d['password'], m_d['id'], p_d['id']
+    ser = UserDetailSerialize(u)
+    ser_data = ser.data
+    ser_data['bucket'] = b
+    ser_data['objects'] = {
+        'count': Objects.objects.filter(owner=request.user, type='f').count()
+    }
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': {
-            'user': u_d,
-            'profile': p_d,
-            'money': m_d,
-            'bucket': list(b.values())
-        }
+        'data': ser_data
     })
 
 
@@ -432,8 +436,6 @@ def user_charge_endpoint(request):
     :return:
     """
     req_user = request.user
-    # if req_user.profile.is_subuser:
-    #     raise NotAuthenticated(detail='sub user can not charge')
 
     fields = (
         ('*order_id', str, (verify_length, 10)),
@@ -547,35 +549,27 @@ def set_capacity_endpoint(request):
         # 最大购买时长1年
         ('*duration', int, (verify_max_value, 365))
     ]
-    if request.method == 'PUT':
-        fields.append(
-            ('*c_id', int, (verify_pk, Capacity))
-        )
+    # if request.method == 'PUT':
+    #     fields.append(
+    #         ('*c_id', int, (verify_pk, Capacity))
+    #     )
 
     data = verify_field(request.data, tuple(fields))
     if not isinstance(data, dict):
         raise ParseError(detail=data)
 
     if request.method == 'POST':
-        t, created = Capacity.objects.update_or_create(user=request.user)
+        q, created = Quota.objects.update_or_create(user=request.user)
 
     if request.method == 'PUT':
-        t = Capacity.objects.get(c_id=data['c_id'])
+        q = Quota.objects.get(user=request.user)
 
-    t.renewal(data['duration'], data['capacity'])
+    if data['capacity'] < q.capacity:
+        raise ParseError('original capacity big than select capacity')
+
+    q.renewal(data['duration'], data['capacity'])
     return Response({
         'code': 0,
-        'msg': 'success'
-    })
-
-
-@api_view(('GET',))
-def __GRANT_SUPERUSER_ENDPOINT__(request):
-    user = request.user
-    u = User.objects.get(user=user)
-    u.is_superuser = 1
-    u.save()
-    return Response({
         'msg': 'success'
     })
 
@@ -598,7 +592,7 @@ def cache_request_user_meta_info(token_key, request):
     ua = request.META.get('HTTP_USER_AGENT', 'unknown')
     remote_ip = get_client_ip(request)
     user = Token.objects.get(key=token_key).user
-    print(remote_ip)
+
     # write token extra info to cache
     cache.set('token_%s' % token_key, (ua, remote_ip, time.time(), user))
     # print(cache.get('token_%s' % token_key))
