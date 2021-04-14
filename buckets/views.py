@@ -439,7 +439,7 @@ def set_bucket_acl_endpoint(request):
             raise ParseError('not found this user')
 
         if user.profile.root_uid != req_user.username and user.profile.parent_uid != req_user.username:
-            raise ParseError('only support sub user can be authorized ')
+            raise ParseError('only support authorized to sub user')
 
         if req_user != bucket.user:
             raise ParseError('bucket__user and user not match')
