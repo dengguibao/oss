@@ -13,11 +13,11 @@ from django.db.models import Q
 from django.contrib.auth.models import User
 from botocore.exceptions import ClientError
 from common.verify import (
-    verify_body, verify_object_name,
-    verify_field, verify_object_path,
-    verify_bucket_name, verify_pk, verify_in_array, verify_username
+    verify_object_name, verify_object_path,
+    verify_bucket_name, verify_pk, verify_in_array,
+    verify_username
 )
-from common.func import verify_path, build_tmp_filename, file_iter, s3_client
+from common.func import verify_path, build_tmp_filename, file_iter, s3_client, clean_post_data
 from .serializer import ObjectsSerialize
 from .models import Objects, ObjectAcl
 import hashlib
@@ -25,7 +25,6 @@ import hashlib
 
 @api_view(('POST',))
 @permission_classes((AllowAny,))
-@verify_body
 def create_directory_endpoint(request):
     req_user = request.user
     _fields = (
@@ -34,9 +33,7 @@ def create_directory_endpoint(request):
         ('path', str, verify_object_path)
     )
     # 检验字段
-    data = verify_field(request.body, _fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, _fields)
     # 检验bucket name是否为非法
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
@@ -240,7 +237,7 @@ def list_objects_endpoint(request):
     })
 
 
-@api_view(('PUT', 'POST',))
+@api_view(('PUT',))
 @permission_classes((AllowAny,))
 def put_object_endpoint(request):
     req_user = request.user
@@ -276,11 +273,12 @@ def put_object_endpoint(request):
             raise NotAuthenticated(detail='current user is not of the bucket owner')
 
     if bucket_perm == 'authenticated':
-        allow_write_user_list = BucketAcl.objects.\
+        allow_user_list = BucketAcl.objects.\
             filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
             values_list('acl_bid')
+        allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、已授权用户
-        if req_user.id not in allow_write_user_list and req_user != b.user:
+        if req_user.id not in allow_user_list and req_user != b.user:
             raise NotAuthenticated('current user not permission pub object')
 
     object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
@@ -417,6 +415,7 @@ def download_object_endpoint(request):
         allow_user_list = ObjectAcl.objects.\
             filter(object_id=obj.obj_id, permission__startswith='authenticated-read'). \
             values_list('acl_oid')
+        allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、已授权、文件拥有者
         if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
             raise NotAuthenticated('current user not permission download the object')
@@ -444,9 +443,7 @@ def set_object_perm_endpoint(request):
         ('*obj_id', int, (verify_pk, Objects)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
-    data = verify_field(request.data, fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.data, fields)
 
     o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=data['obj_id'])
 
@@ -461,6 +458,7 @@ def set_object_perm_endpoint(request):
         allow_user_list = ObjectAcl.objects.\
             filter(object_id=o.obj_id, permission='authenticated-read-write'). \
             values_list('acl_oid')
+        allow_user_list = [i[0] for i in allow_user_list]
         # 已授权列表、桶归属者、文件对象归属者
         if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
             raise NotAuthenticated('you are not in the allow access list')
@@ -507,6 +505,7 @@ def query_object_perm_endpoint(request):
         allow_user_list = ObjectAcl.objects. \
             filter(object_id=o.obj_id, permission__startswith='authenticated-read'). \
             values_list('acl_oid')
+        allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、文件对象拥有者、已授权
         if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
             raise NotAuthenticated('current user do not allow query this object permission')
@@ -547,7 +546,8 @@ def set_object_acl_endpoint(request):
                 bucket_id=o.bucket_id,
                 permission='authenticated-read-write'
             ).values_list('acl_bid')
-            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+            allow_user_list = [i[0] for i in allow_user]
+            if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
                 raise ParseError('current user is not in allow access list')
 
         return Response({
@@ -562,9 +562,7 @@ def set_object_acl_endpoint(request):
             ('*username', str, verify_username),
             ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
         )
-        data = verify_field(request.body, fields)
-        if not isinstance(data, dict):
-            raise ParseError(data)
+        data = clean_post_data(request.body, fields)
         try:
             o = Objects.objects.get(obj_id=int(data['obj_id']))
             user = User.objects.get(username=data['username'])
@@ -582,7 +580,8 @@ def set_object_acl_endpoint(request):
                 bucket_id=o.bucket_id,
                 permission='authenticated-read-write'
             ).values_list('acl_bid')
-            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+            allow_user_list = [i[0] for i in allow_user]
+            if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
                 raise ParseError('current user is not in allow access list')
 
         ObjectAcl.objects.update_or_create(
@@ -603,6 +602,8 @@ def set_object_acl_endpoint(request):
             o = ObjectAcl.objects.get(acl_oid=int(acl_oid))
         except ObjectAcl.DoesNotExist:
             raise ParseError('not found resource')
+        except TypeError:
+            raise ParseError('acl_oid is not a number')
 
         if o.permission == 'private':
             if o.owner != req_user and o.bucket.user != req_user:
@@ -613,7 +614,8 @@ def set_object_acl_endpoint(request):
                 bucket_id=o.bucket_id,
                 permission='authenticated-read-write'
             ).values_list('acl_bid')
-            if req_user.id not in allow_user and req_user != o.owner and req_user != o.bucket.user:
+            allow_user_list = [i[0] for i in allow_user]
+            if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
                 raise ParseError('current user is not in allow access list')
 
         o.delete()

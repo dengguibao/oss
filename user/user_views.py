@@ -9,16 +9,15 @@ from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
 from requests.exceptions import ConnectionError
 from django.db.models import Q
-from objects.models import Objects
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
 from common.verify import (
-    verify_field, verify_mail, verify_username,
-    verify_phone, verify_body, verify_length,
+    verify_mail, verify_username,
+    verify_phone, verify_length,
     verify_max_length, verify_max_value
 )
-from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_phone_verify_code
+from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_phone_verify_code, clean_post_data
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, Money, Quota
 from rgwadmin.exceptions import NoSuchUser
@@ -28,7 +27,6 @@ import time
 
 @api_view(['POST'])
 @permission_classes((AllowAny,))
-@verify_body
 def create_user_endpoint(request):
     """
     创建用户
@@ -61,10 +59,7 @@ def create_user_endpoint(request):
         ('*phone', str, verify_phone),
     )
 
-    data = verify_field(request.body, fields)
-
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, fields)
 
     try:
         User.objects.get(username=data['username'])
@@ -101,7 +96,7 @@ def create_user_endpoint(request):
             p.is_subuser = True
             p.parent_uid = request.user.username
             p.root_uid = request.user.profile.root_uid
-            p.level = request.user.profile.level+1
+            p.level = request.user.profile.level + 1
             p.save()
         p.save()
 
@@ -116,7 +111,6 @@ def create_user_endpoint(request):
 
 @api_view(('POST',))
 @permission_classes((AllowAny,))
-@verify_body
 def user_login_endpoint(request):
     """
     使用用户名和密码登陆，成功登陆获取token，当token超过setting.TOKEN_EXPIRE_TIME后更新token
@@ -128,9 +122,7 @@ def user_login_endpoint(request):
         ('*verify_code', str, (verify_length, 6))
     )
 
-    data = verify_field(request.body, fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, fields)
 
     try:
         u = User.objects.get(username=data['username'])
@@ -197,7 +189,6 @@ def user_login_endpoint(request):
 
 
 @api_view(('POST',))
-@verify_body
 def change_password_endpoint(request):
     """
     修改用户名密码，如果是超级管理员则不需要提供原密码，直接更改某个用户的密码
@@ -211,17 +202,12 @@ def change_password_endpoint(request):
     ]
 
     if not request.user.is_superuser:
-        fields = [
-            ('*username', str, verify_username),
-            ('*old_pwd', str, (verify_max_length, 30)),
-            ('*pwd1', str, (verify_max_length, 30)),
-            ('*pwd2', str, (verify_max_length, 30)),
-        ]
+        fields.append(
+            ('*old_pwd', str, (verify_max_length, 30))
+        )
 
-    data = verify_field(request.body, tuple(fields))
+    data = clean_post_data(request.body, tuple(fields))
 
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
     # 验证两次密码是否一样
     if data['pwd1'] != data['pwd2']:
         raise ParseError(detail='the old and new password is not match!')
@@ -254,7 +240,6 @@ def change_password_endpoint(request):
 
 
 @api_view(('DELETE',))
-@verify_body
 def user_delete_endpoint(request):
     """
     删除指定的用户，该超作只允许超级管理员执行
@@ -268,9 +253,7 @@ def user_delete_endpoint(request):
         ('*username', str, verify_username),
         ('*user_id', int, None)
     )
-    data = verify_field(request.body, fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, fields)
 
     try:
         u = User.objects.get(pk=data['user_id'])
@@ -446,7 +429,7 @@ def send_phone_verify_code_endpoint(request):
 
 
 @api_view(('POST',))
-@verify_body
+@permission_classes((AllowAny,))
 def user_charge_endpoint(request):
     """
     用户充值，只允许普通用户用户充值，子帐户不允许充值
@@ -459,10 +442,7 @@ def user_charge_endpoint(request):
         ('*order_id', str, (verify_length, 10)),
         ('*money', float, (verify_max_value, 99999.0))
     )
-    data = verify_field(request.body, fields)
-
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, fields)
 
     m = req_user.money.get()
     m.charge(data['money'])
@@ -561,7 +541,6 @@ def query_user_usage(request):
 
 
 @api_view(('POST', 'PUT'))
-@verify_body
 def set_capacity_endpoint(request):
     fields = [
         # 最大购买40T流量
@@ -574,9 +553,7 @@ def set_capacity_endpoint(request):
     #         ('*c_id', int, (verify_pk, Capacity))
     #     )
 
-    data = verify_field(request.data, tuple(fields))
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.data, tuple(fields))
 
     if request.method == 'POST':
         q, created = Quota.objects.update_or_create(user=request.user)

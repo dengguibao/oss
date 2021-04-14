@@ -8,18 +8,16 @@ from django.db.models import Q
 from rgwadmin.exceptions import NoSuchUser, NoSuchKey, NoSuchBucket
 from .models import BucketType, Buckets, BucketRegion, BucketAcl
 from common.verify import (
-    verify_max_length, verify_body, verify_field,
-    verify_bucket_name, verify_max_value, verify_pk,
-    verify_true_false, verify_in_array, verify_username
+    verify_max_length, verify_bucket_name, verify_max_value,
+    verify_pk, verify_true_false, verify_in_array, verify_username
 )
 from django.contrib.auth.models import User
-from common.func import rgw_client, s3_client
+from common.func import rgw_client, s3_client, clean_post_data, verify_super_user
 from .serializer import BucketSerialize
 import time
 
 
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
-@verify_body
 def set_bucket_type_endpoint(request):
     """
     bucket类型，以及定价
@@ -49,9 +47,7 @@ def set_bucket_type_endpoint(request):
 
     # post put delete需要管理员且验证通过才能操作
     if request.method in ('POST', 'PUT', 'DELETE'):
-        data = verify_field(request.body, tuple(fields))
-        if not isinstance(data, dict):
-            raise ParseError(detail=data)
+        data = clean_post_data(request.body, tuple(fields))
 
         if not request.user.is_superuser:
             return NotAuthenticated(detail='permission denied!')
@@ -79,7 +75,6 @@ def set_bucket_type_endpoint(request):
 
 
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
-@verify_body
 def set_bucket_region_endpoint(request):
     """
     存储区域
@@ -100,7 +95,7 @@ def set_bucket_region_endpoint(request):
     # get请求
     if request.method == 'GET':
         o = model.objects.all()
-        # 管理员则可以查看所有的折扣码情况
+
         if request.user.is_superuser:
             o = o.values()
         else:
@@ -122,12 +117,8 @@ def set_bucket_region_endpoint(request):
 
     # post, put, delete方法需要管理员、且验证字段通过才能进行
     if request.method in ('POST', 'PUT', 'DELETE'):
-        data = verify_field(request.body, tuple(fields))
-        if not isinstance(data, dict):
-            raise ParseError(detail=data)
-
-        if not request.user.is_superuser:
-            raise NotAuthenticated(detail='permission denied!')
+        data = clean_post_data(request.body, tuple(fields))
+        verify_super_user(request)
 
     try:
         if request.method == 'POST':
@@ -160,7 +151,6 @@ def set_bucket_region_endpoint(request):
 
 
 @api_view(('GET', 'POST', 'DELETE'))
-@verify_body
 def set_buckets_endpoint(request):
     req_user = request.user
     if request.method == 'GET':
@@ -239,9 +229,7 @@ def set_buckets_endpoint(request):
         ]
 
     # 数据过滤与验证
-    data = verify_field(request.body, tuple(fields))
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.body, tuple(fields))
 
     # 开始进行业务逻辑处理
     try:
@@ -355,9 +343,7 @@ def set_bucket_perm_endpoint(request):
         ('*bucket_id', int, (verify_pk, Buckets)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
-    data = verify_field(request.data, fields)
-    if not isinstance(data, dict):
-        raise ParseError(detail=data)
+    data = clean_post_data(request.data, fields)
 
     b = Buckets.objects.select_related('bucket_region').get(bucket_id=data['bucket_id'])
 
@@ -421,6 +407,8 @@ def set_bucket_acl_endpoint(request):
             raise ParseError('not found this bucket')
         except BucketAcl.DoesNotExist:
             raise ParseError('not found resource')
+        except TypeError:
+            raise ParseError('acl_bid is not a number')
 
         if b.user != req_user:
             raise NotAuthenticated('user and bucket__user not match')
@@ -437,9 +425,7 @@ def set_bucket_acl_endpoint(request):
             ('*username', str, verify_username),
             ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
         )
-        data = verify_field(request.body, fields)
-        if not isinstance(data, dict):
-            raise ParseError(data)
+        data = clean_post_data(request.body, fields)
         try:
             bucket = Buckets.objects.get(bucket_id=int(data['bucket_id']))
             user = User.objects.get(username=data['username'])

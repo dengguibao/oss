@@ -1,37 +1,16 @@
 from rgwadmin import RGWAdmin
 from boto3.session import Session
-# from django.conf import settings
+from rest_framework.exceptions import ParseError, PermissionDenied
+from common.verify import verify_field
 from objects.models import Objects
 from buckets.models import BucketRegion
 from django.contrib.auth.models import User
 from rgwadmin.exceptions import NoSuchUser
-# from user.models import Quota
 from hashlib import md5
 import random
 import os
 # import uuid
 import requests
-
-# def init_rgw_api():
-#     access_key, secret_key, server = settings.RGW_API_KEY['NORMAL']
-#     return RGWAdmin(
-#         access_key=access_key,
-#         secret_key=secret_key,
-#         server=server,
-#         secure=False,
-#         verify=False
-#     )
-#
-#
-# def init_s3_connection(access_key, secret_key):
-#     _, _, server = settings.RGW_API_KEY['NORMAL']
-#     conn = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key)
-#     client = conn.client(
-#         service_name='s3',
-#         endpoint_url='http://%s' % server,
-#         verify=False
-#     )
-#     return client
 
 
 def file_iter(filename):
@@ -60,8 +39,7 @@ def verify_path(path):
 
 
 def build_tmp_filename():
-    rand_str = ''.join(random.sample('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 10))
-    file_name = '/tmp/ceph_oss_%s.dat' % rand_str
+    file_name = '/tmp/ceph_oss_%s.dat' % random_build_str(10)
     return file_name
 
 
@@ -169,3 +147,16 @@ def send_phone_verify_code(phone: str):
         }
     )
     return ret.status_code, verify_code
+
+
+def clean_post_data(body_data, fields):
+    data = verify_field(body_data, tuple(fields))
+    if not isinstance(data, dict):
+        raise ParseError(data)
+    else:
+        return data
+
+
+def verify_super_user(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied('only allow super user access')

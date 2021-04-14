@@ -1,6 +1,3 @@
-from rest_framework.status import HTTP_400_BAD_REQUEST
-from rest_framework.response import Response
-
 import re
 import json
 
@@ -136,15 +133,15 @@ def verify_object_path(value: str) -> bool:
     return True
 
 
-def verify_body(func):
-    def wrap(request, *args, **kwargs):
-        if request.method in ('DELETE', 'POST', 'PUT'):
-            try:
-                j = json.loads(request.body.decode())
-            except:
-                return Response({
-                    'code': 1,
-                    'msg': 'illegal request, request content is not application/json'
-                }, status=HTTP_400_BAD_REQUEST)
-        return func(request, *args, **kwargs)
-    return wrap
+# def verify_body(func):
+#     def wrap(request, *args, **kwargs):
+#         if request.method in ('DELETE', 'POST', 'PUT'):
+#             try:
+#                 j = json.loads(request.body.decode())
+#             except:
+#                 return Response({
+#                     'code': 1,
+#                     'msg': 'illegal request, request content is not application/json'
+#                 }, status=HTTP_400_BAD_REQUEST)
+#         return func(request, *args, **kwargs)
+#     return wrap
