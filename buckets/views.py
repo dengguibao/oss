@@ -159,7 +159,11 @@ def set_buckets_endpoint(request):
             select_related('bucket_region')
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
-            res = obj.filter(user=request.user)
+            res = obj.filter(
+                Q(user=request.user) |
+                Q(user__username=req_user.profile.parent_uid) |
+                Q(user__username=req_user.profile.root_uid)
+            )
         else:
             kw = request.GET.get('keyword', None)
             if kw:
@@ -433,6 +437,9 @@ def set_bucket_acl_endpoint(request):
             raise ParseError('not found this bucket')
         except User.DoesNotExist:
             raise ParseError('not found this user')
+
+        if user.profile.root_uid != req_user.username and user.profile.parent_uid != req_user.username:
+            raise ParseError('only support sub user can be authorized ')
 
         if req_user != bucket.user:
             raise ParseError('bucket__user and user not match')
