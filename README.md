@@ -8,7 +8,8 @@ install python3 environment
 #### ubuntu
 > apt install python3 python3-pip python-memcached python-pylibmc memcached
 
-pip install project dependent
+pip install project dependent  
+
 chdir to project directory, and then install dep
 
 > pip3 install -r ./requirement.txt
