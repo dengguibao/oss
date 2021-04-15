@@ -71,10 +71,11 @@ class ExpireTokenAuthentication(TokenAuthentication):
         return cache_user, None
 
 
-def verify_permission(model_name):
+def require_permission(model_name: str, app_label: str = None):
     """
     验证权限
     """
+
     def decorator(func):
         def wrapper(request):
             perms_map = {
@@ -87,16 +88,17 @@ def verify_permission(model_name):
                 'DELETE': '{app_label}.delete_{model_name}',
             }
             if not request.user and not request.user.is_authenticated:
-                raise NotAuthenticated('not login')
+                raise NotAuthenticated('No login')
 
             r = resolve(request.path)
             perms = perms_map[request.method].format(
-                app_label='auth' if r.app_name == 'user' else r.app_name,
+                app_label=app_label if app_label else 'auth' if r.app_name == 'user' else r.app_name,
                 model_name=model_name
             )
-            if request.user.has_perm(perms):
+            if request.user.has_perm(perms) and perms:
                 return func(request)
-            raise PermissionDenied('permission denied!')
-        return wrapper
-    return decorator
+            raise PermissionDenied('Permission Denied!')
 
+        return wrapper
+
+    return decorator
