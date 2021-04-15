@@ -3,12 +3,17 @@ import json
 
 
 def verify_phone(phone: str) -> bool:
+    """
+    验证手机号码是否为真实
+    """
     try:
         int(phone)
     except ValueError:
         return False
 
-    return False if len(phone) != 11 or phone[0:2] not in ['13', '14', '15', '16', '17', '18', '19'] else True
+    support_phone_prefix = ['13', '14', '15', '16', '17', '18', '19']
+
+    return False if len(phone) != 11 or phone[0:2] not in support_phone_prefix else True
 
 
 def verify_is_equal(x, y):
@@ -22,8 +27,21 @@ def verify_field(data: bytes, field: tuple):
     """
     使用用户自定义的函数验证用户传过来的数据
     字段格式为（字段名，字段类型，验证方法）， 其中字段名，第一个字符为*的为段包含在字典中的key
+    验证方法可以为元组，如果为元组，则第一个元素为验证方法，第二个元素为验证方法的参数
+    -----------
+    例如：
+    fields = (
+        ('*name', str, (verify_max_length, 10))
+    )
+    以上字段会验证json中的name是否为字符串，则最大长度不能超过10个字符
+    -----------
     通过则返回包含字段中的key的字典，否则返回未验证通过的信息
     """
+
+    # 防止过大的非法post数据包
+    if len(data) > 2*1024**2:
+        return 'json body is too large'
+
     if isinstance(data, bytes):
         try:
             data = json.loads(data.decode())
@@ -35,28 +53,32 @@ def verify_field(data: bytes, field: tuple):
 
     buff = {}
 
-    # prevent all field is not necessary
+    # 防止所有字段都为可选字段，但是组合起来必须有一项目
     pass_flag = False
 
     if isinstance(field, tuple):
         for field_name, field_type, verify_param in field:
-
+            # 以*开头的为必选段段
             if field_name[0] == '*':
                 field_name = field_name[1:]
-                if field_name not in data or (data[field_name] not in (True, False) and isinstance(data[field_name], bool)):
+                if field_name not in data or \
+                        (data[field_name] not in (True, False) and isinstance(data[field_name], bool)):
                     return 'field "%s" is necessary, can not be empty' % field_name
-
+            # 可选字段，不包含进入下一轮loop
             if field_name not in data:
                 continue
 
+            # 验证数据类型是否正确
             if not isinstance(data[field_name], field_type):
                 return 'field %s type wrong!' % field_name
 
+            # 带参数的验证方法
             if verify_param and isinstance(verify_param, tuple) and len(verify_param) > 1:
                 verify_func = verify_param[0]
                 verify_arg = verify_param[1]
                 verify_result = verify_func(data[field_name], verify_arg)
 
+            # 不带参数的验证方法
             if verify_param and hasattr(verify_param, '__call__'):
                 verify_result = verify_param(data[field_name])
 
@@ -73,8 +95,9 @@ def verify_field(data: bytes, field: tuple):
                 k = k[1:]
 
             if k in data:
-                if isinstance(data[k], str) and len(data[k]) > 100:
-                    data[k] = data[k].strip()[0:100]
+                # 如果是文本内容最多只接收200个字符
+                if isinstance(data[k], str) and len(data[k]) > 200:
+                    data[k] = data[k].strip()[0:200]
                 buff[k] = data[k].strip() if isinstance(data[k], str) else data[k]
         return buff
     return False
@@ -88,37 +111,58 @@ def verify_mail(mail: str) -> bool:
 
 
 def verify_username(username: str) -> bool:
+    """
+    正则验证用户名
+    """
     return True if re.match("^[A-Z0-9a-z_\\-.]{6,20}$", username) else False
 
 
 def verify_bucket_name(name: str) -> bool:
+    """
+    正则验证bucket名称
+    """
     return True if re.match('^[a-z0-9][a-z0-9\\-]{1,62}$', name) else False
 
 
 def verify_length(data: str, length: int) -> bool:
+    """
+    验证长度
+    """
     return True if len(data) == length else False
 
 
 def verify_in_array(data: str, array: tuple) -> bool:
+    """
+    验证元素是否包含在指定的元组中
+    """
     return True if data in array else False
 
 
 def verify_true_false(i) -> bool:
     """
-    verify object(i) is true or false
+    验证对象是否为真、假、1、0
     """
     return True if i in ('1', 1, 'true', 'false', 0, '0') else False
 
 
 def verify_max_length(s: str, max_len: int) -> bool:
+    """
+    验证最大允许长度
+    """
     return True if len(s) < max_len else False
 
 
 def verify_max_value(i, max_value) -> bool:
+    """
+    验证数字的最大值
+    """
     return True if 0 < i < max_value else False
 
 
 def verify_pk(i: int, model: object) -> bool:
+    """
+    验证某个对象的的主键是否为真实有效
+    """
     try:
         model.objects.get(pk=int(i))
     except:
@@ -127,10 +171,17 @@ def verify_pk(i: int, model: object) -> bool:
 
 
 def verify_object_name(value: str) -> bool:
+    """
+    验证上传文件对象的文件名是否合法
+    """
     return True if re.match('^[\u4e00-\u9fa5a-zA-Z0-9\\-_]{1,1024}$', value) else False
 
 
 def verify_object_path(value: str) -> bool:
+    """
+    验证对象路径是否为有合法
+    """
+    # 路径不能用/开头但是必须以/结尾
     if not value.endswith('/') or value.startswith('/'):
         return False
     if not re.match('^[\u4e00-\u9fa5a-zA-Z0-9,\\-_/]{1,2048}/$', value):

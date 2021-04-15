@@ -20,7 +20,7 @@ import time
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
 def set_bucket_type_endpoint(request):
     """
-    bucket类型，以及定价
+    bucket类型的新增、查询、修改、删除
     :param request:
     :return:
     """
@@ -77,7 +77,7 @@ def set_bucket_type_endpoint(request):
 @api_view(('GET', 'POST', 'PUT', 'DELETE'))
 def set_bucket_region_endpoint(request):
     """
-    存储区域
+    存储区域的查询、新增、修改、删除
     :param request:
     :return:
     """
@@ -152,6 +152,9 @@ def set_bucket_region_endpoint(request):
 
 @api_view(('GET', 'POST', 'DELETE'))
 def set_buckets_endpoint(request):
+    """
+    bucket的查询、新增、删除
+    """
     req_user = request.user
     if request.method == 'GET':
         # 联合查询bucket user profile表
@@ -306,6 +309,9 @@ def set_buckets_endpoint(request):
 
 @api_view(('GET',))
 def query_bucket_name_exist_endpoint(request):
+    """
+    查询bucket是否已经存在
+    """
     name = request.GET.get('name', None)
     ret = query_bucket_exist(name)
     return Response({
@@ -317,6 +323,9 @@ def query_bucket_name_exist_endpoint(request):
 
 @api_view(('GET',))
 def get_bucket_detail_endpoint(request):
+    """
+    利用rgw读取bucket详情
+    """
     bucket_name = request.GET.get('bucket_name', None)
     req_user = request.user
 
@@ -343,6 +352,9 @@ def get_bucket_detail_endpoint(request):
 
 @api_view(('PUT',))
 def set_bucket_perm_endpoint(request):
+    """
+    查询bucket的读写权限
+    """
     fields = (
         ('*bucket_id', int, (verify_pk, Buckets)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
@@ -355,13 +367,14 @@ def set_bucket_perm_endpoint(request):
         raise NotAuthenticated(detail='bucket and user not match')
 
     try:
-        # 该权限s3上没有
+        # authenticated该权限s3上没有，所以不在上游进行处理
         if 'authenticated' != data['permission']:
             s3 = s3_client(b.bucket_region.reg_id, b.user.username)
             s3.put_bucket_acl(
                 ACL=data['permission'],
                 Bucket=b.name
             )
+        # 更新本地数据库
         b_acl = b.bucket_acl.get()
         b_acl.permission = data['permission']
         b_acl.save()
@@ -376,6 +389,9 @@ def set_bucket_perm_endpoint(request):
 
 @api_view(('GET',))
 def query_bucket_perm_endpoint(request):
+    """
+    查询指定的bucket的读写权限
+    """
     bucket_id = request.GET.get('bucket_id', None)
     try:
         b = Buckets.objects.get(bucket_id=bucket_id)
@@ -396,7 +412,7 @@ def query_bucket_perm_endpoint(request):
 def set_bucket_acl_endpoint(request):
     """
     授权某个用户对指定桶内所有资源的对象的访问权限
-    权限仅支持 认证读、认证读写
+    权限仅支持认证读、认证读写
     """
     req_user = request.user
     if request.method == 'GET':
@@ -474,6 +490,9 @@ def set_bucket_acl_endpoint(request):
 
 
 def query_bucket_exist(name):
+    """
+    查询bucket是否存在
+    """
     try:
         Buckets.objects.get(name=name)
     except Buckets.DoesNotExist:

@@ -14,6 +14,9 @@ import requests
 
 
 def file_iter(filename):
+    """
+    使用流式下载文件是，分批读取文件流
+    """
     if not os.path.exists(filename) or not os.path.isfile(filename):
         return
     with open(filename, 'rb') as fp:
@@ -27,7 +30,9 @@ def file_iter(filename):
 
 
 def verify_path(path):
-    # 判断用户传过来的路程径是否为真实有效
+    """
+    查询用户post过来的路径是否为真实有效已存在的路径
+    """
     if not path or path.startswith('/') and not path.endswith('/'):
         return False
     try:
@@ -39,11 +44,19 @@ def verify_path(path):
 
 
 def build_tmp_filename():
+    """
+    随机生成一个临时文件名
+    """
     file_name = '/tmp/ceph_oss_%s.dat' % random_build_str(10)
     return file_name
 
 
 def rgw_client(region_id: int):
+    """
+    初始化rgw客户端
+
+    使用区域中的管理员key生成rgw客户端
+    """
     try:
         b = BucketRegion.objects.get(reg_id=region_id)
     except BucketRegion.DoesNotExist:
@@ -59,6 +72,13 @@ def rgw_client(region_id: int):
 
 
 def s3_client(reg_id: int, username: str):
+    """
+    初始化s3客户端
+
+    使用指定区域中的管理员key查询用户是否存在
+    如果用户存在则使用用户的key创建s3客户端
+    如果不存在则创建该用户，使用指定的key，然后再初始化s3客户端
+    """
     u = User.objects.select_related('profile').select_related('quota').get(username=username)
     if not u.profile.phone_verify:
         return
@@ -101,7 +121,7 @@ def build_ceph_userinfo(username: str) -> tuple:
 
 def random_build_str(length: int) -> str:
     """
-    随机构建key
+    随机构建生成指定长度的字符串，包含a-zA-Z0-9
     """
     return ''.join(random.sample('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', length))
     # if len(origin_str) < 32:
@@ -129,6 +149,9 @@ def get_client_ip(request):
 
 
 def send_phone_verify_code(phone: str):
+    """
+    利用短信接口，向指定的手机号码发送验证码短信
+    """
     sn = 'SDK-BBX-010-37896'
     pwd = 'ihEb64rQ'
     mix_pwd = '%s%s' % (sn, pwd)
@@ -150,6 +173,9 @@ def send_phone_verify_code(phone: str):
 
 
 def clean_post_data(body_data, fields):
+    """
+    清理过滤用户post的json数据
+    """
     data = verify_field(body_data, tuple(fields))
     if not isinstance(data, dict):
         raise ParseError(data)
@@ -158,5 +184,8 @@ def clean_post_data(body_data, fields):
 
 
 def verify_super_user(request):
+    """
+    验证用户是否为超级管理员
+    """
     if not request.user.is_superuser:
         raise PermissionDenied('only allow super user access')

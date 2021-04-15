@@ -26,6 +26,10 @@ import hashlib
 @api_view(('POST',))
 @permission_classes((AllowAny,))
 def create_directory_endpoint(request):
+    """
+    在指定的bucket内创建目录
+    该操作仅在ceph后端创建一个空对象
+    """
     req_user = request.user
     _fields = (
         ('*bucket_name', str, verify_bucket_name),
@@ -100,6 +104,9 @@ def create_directory_endpoint(request):
 @api_view(('DELETE',))
 @permission_classes((AllowAny,))
 def delete_object_endpoint(request):
+    """
+    删除文件对象
+    """
     req_user = request.user
     # 验证obj_id是否为非法id
     try:
@@ -176,7 +183,9 @@ def delete_object_endpoint(request):
 @api_view(('GET',))
 @permission_classes((AllowAny,))
 def list_objects_endpoint(request):
-
+    """
+    列出桶内的所有文件对象和目录
+    """
     req_user = request.user
     path = request.GET.get('path', None)
     bucket_name = request.GET.get('bucket_name', None)
@@ -391,6 +400,9 @@ def put_object_endpoint(request):
 @api_view(('GET',))
 @permission_classes((AllowAny,))
 def download_object_endpoint(request):
+    """
+    下载指定桶内的指定的文件对象，只能是文件，目录不能下载
+    """
     try:
         obj_id = int(request.GET.get('obj_id', None))
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(obj_id=obj_id)
@@ -439,6 +451,9 @@ def download_object_endpoint(request):
 
 @api_view(('PUT',))
 def set_object_perm_endpoint(request):
+    """
+    设置文件对象的读写权限
+    """
     fields = (
         ('*obj_id', int, (verify_pk, Objects)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
@@ -484,6 +499,9 @@ def set_object_perm_endpoint(request):
 
 @api_view(('GET',))
 def query_object_perm_endpoint(request):
+    """
+    查询文件对象的读写权限
+    """
     obj_id = request.GET.get('obj_id', None)
     try:
         o = Objects.objects.get(obj_id=int(obj_id))
