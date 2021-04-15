@@ -21,7 +21,7 @@ from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_pho
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, Money, Quota
 from rgwadmin.exceptions import NoSuchUser
-from user.tokenauth import require_permission
+from user.tokenauth import verify_permission
 
 import time
 
@@ -286,7 +286,7 @@ def user_delete_endpoint(request):
 
 
 @api_view(('GET',))
-# @require_permission(model_name='user')
+# @verify_permission(model_name='user')
 def list_user_info_endpoint(request):
     """
     列出所有用户，当前操作对象为超级管理员时，可指定某个用户名，不批定则列出所有用户

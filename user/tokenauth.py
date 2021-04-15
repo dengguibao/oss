@@ -71,7 +71,7 @@ class ExpireTokenAuthentication(TokenAuthentication):
         return cache_user, None
 
 
-def require_permission(model_name: str, app_label: str = None):
+def verify_permission(model_name: str, app_label: str = None):
     """
     验证权限
     """
