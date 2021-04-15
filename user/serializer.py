@@ -35,14 +35,14 @@ class MoneySerialize(ModelSerializer):
 
 class UserSerialize(ModelSerializer):
     profile = ProfileSerialize(read_only=True)
-    capacity = QuotaSerialize(read_only=True)
+    quota = QuotaSerialize(read_only=True)
 
     class Meta:
         model = User
         fields = (
             'id', 'is_superuser', 'username',
             'is_active', 'first_name', 'last_login',
-            'date_joined', 'email', 'profile', 'capacity'
+            'date_joined', 'email', 'profile', 'quota'
 
         )
 

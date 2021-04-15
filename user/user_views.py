@@ -113,7 +113,7 @@ def create_user_endpoint(request):
 @permission_classes((AllowAny,))
 def user_login_endpoint(request):
     """
-    使用用户名和密码登陆，成功登陆获取token，当token超过setting.TOKEN_EXPIRE_TIME后更新token
+    使用用户名和密码登陆
     """
 
     fields = (
@@ -432,7 +432,7 @@ def send_phone_verify_code_endpoint(request):
 @permission_classes((AllowAny,))
 def user_charge_endpoint(request):
     """
-    用户充值，只允许普通用户用户充值，子帐户不允许充值
+    用户充值
     :param request:
     :return:
     """
@@ -457,26 +457,33 @@ def user_charge_endpoint(request):
 @api_view(("GET",))
 @permission_classes((AllowAny,))
 def query_user_exist_endpoint(request):
+    """
+    根据查询条件查询用户是否
+    """
     username = request.GET.get('username', None)
     phone = request.GET.get('phone', None)
     email = request.GET.get('email', None)
 
-    exist = False
-    try:
-        if username:
-            User.objects.get(username=username)
+    if not username and not phone and not email:
+        exist = 'unknown'
+    else:
+        try:
+            if username:
+                User.objects.get(username=username)
 
-        if phone:
-            Profile.objects.get(phone=phone)
+            if phone:
+                Profile.objects.get(phone=phone)
 
-        if email:
-            User.objects.get(email=email)
-    except User.DoesNotExist:
-        exist = False
-    except User.MultipleObjectsReturned:
-        exist = True
-    except Profile.DoesNotExist:
-        exist = False
+            if email:
+                User.objects.get(email=email)
+        except User.DoesNotExist:
+            exist = False
+        except User.MultipleObjectsReturned:
+            exist = True
+        except Profile.DoesNotExist:
+            exist = False
+        else:
+            exist = True
 
     return Response({
         'code': 0,
@@ -488,6 +495,9 @@ def query_user_exist_endpoint(request):
 @api_view(("GET",))
 @permission_classes((AllowAny,))
 def query_user_usage(request):
+    """
+    查询用户流量及使情情况
+    """
     req_user = request.user
     username = request.GET.get('username', None)
     start_time = request.GET.get('start', None)
@@ -542,16 +552,15 @@ def query_user_usage(request):
 
 @api_view(('POST', 'PUT'))
 def set_capacity_endpoint(request):
+    """
+    设置或者修改用户存储容量，即用户配额
+    """
     fields = [
         # 最大购买40T流量
         ('*capacity', int, (verify_max_value, 40960)),
         # 最大购买时长1年
         ('*duration', int, (verify_max_value, 365))
     ]
-    # if request.method == 'PUT':
-    #     fields.append(
-    #         ('*c_id', int, (verify_pk, Capacity))
-    #     )
 
     data = clean_post_data(request.data, tuple(fields))
 
