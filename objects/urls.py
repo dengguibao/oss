@@ -9,6 +9,7 @@ from .views import (
     query_object_perm_endpoint,
     set_object_acl_endpoint,
 )
+app_name = 'objects'
 
 urlpatterns = [
     path('objects/create_folder', create_directory_endpoint),

@@ -2,9 +2,11 @@ from rest_framework.authentication import TokenAuthentication
 from .models import Profile
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions, HTTP_HEADER_ENCODING
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from django.core.cache import cache
 from django.conf import settings
 from common.func import get_client_ip
+from django.urls import resolve
 import time
 
 
@@ -62,8 +64,39 @@ class ExpireTokenAuthentication(TokenAuthentication):
         if cache_ip != client_ip:
             raise exceptions.AuthenticationFailed(_('Client ip error.'))
 
-        if time.time()-cache_latest_time > settings.TOKEN_EXPIRE_TIME:
+        if time.time() - cache_latest_time > settings.TOKEN_EXPIRE_TIME:
             raise exceptions.AuthenticationFailed(_('Token expire.'))
 
         cache.set('token_%s' % key, (cache_ua, cache_ip, time.time(), cache_user))
         return cache_user, None
+
+
+def verify_permission(model_name):
+    """
+    验证权限
+    """
+    def decorator(func):
+        def wrapper(request):
+            perms_map = {
+                'GET': '{app_label}.view_{model_name}',
+                'OPTIONS': None,
+                'HEAD': None,
+                'POST': '{app_label}.add_{model_name}',
+                'PUT': '{app_label}.change_{model_name}',
+                'PATCH': '{app_label}.change_{model_name}',
+                'DELETE': '{app_label}.delete_{model_name}',
+            }
+            if not request.user and not request.user.is_authenticated:
+                raise NotAuthenticated('not login')
+
+            r = resolve(request.path)
+            perms = perms_map[request.method].format(
+                app_label='auth' if r.app_name == 'user' else r.app_name,
+                model_name=model_name
+            )
+            if request.user.has_perm(perms):
+                return func(request)
+            raise PermissionDenied('permission denied!')
+        return wrapper
+    return decorator
+

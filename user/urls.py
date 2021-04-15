@@ -18,6 +18,7 @@ from .group_views import (
     SetGroupPermissionEndpoint,
     list_all_available_perms_endpoint
 )
+app_name = 'user'
 
 urlpatterns = [
     path('user/register', create_user_endpoint),

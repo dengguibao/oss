@@ -10,6 +10,7 @@ from .views import (
     query_bucket_perm_endpoint,
     set_bucket_acl_endpoint,
 )
+app_name = 'buckets'
 
 urlpatterns = [
     path('buckets/type', set_bucket_type_endpoint),
