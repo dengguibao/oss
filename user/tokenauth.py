@@ -67,6 +67,3 @@ class ExpireTokenAuthentication(TokenAuthentication):
 
         cache.set('token_%s' % key, (cache_ua, cache_ip, time.time(), cache_user))
         return cache_user, None
-
-
-

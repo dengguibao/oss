@@ -3,7 +3,12 @@ import json
 
 
 def verify_phone(phone: str) -> bool:
-    return False if len(phone) != 11 or phone[0:2] not in ['13', '18', '15', '17'] else True
+    try:
+        int(phone)
+    except ValueError:
+        return False
+
+    return False if len(phone) != 11 or phone[0:2] not in ['13', '14', '15', '16', '17', '18', '19'] else True
 
 
 def verify_is_equal(x, y):
