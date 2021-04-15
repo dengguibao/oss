@@ -77,7 +77,7 @@ def require_permission(model_name: str, app_label: str = None):
     """
 
     def decorator(func):
-        def wrapper(request):
+        def wrapper(request, *args, **kwargs):
             perms_map = {
                 'GET': '{app_label}.view_{model_name}',
                 'OPTIONS': None,
@@ -96,7 +96,7 @@ def require_permission(model_name: str, app_label: str = None):
                 model_name=model_name
             )
             if request.user.has_perm(perms) and perms:
-                return func(request)
+                return func(request, *args, **kwargs)
             raise PermissionDenied('Permission Denied!')
 
         return wrapper
