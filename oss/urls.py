@@ -14,6 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import path, include
+from common.views import send_phone_verify_code_endpoint, build_image_verify_code_endpoint
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
@@ -21,5 +22,7 @@ urlpatterns = [
     path('api/', include('buckets.urls')),
     path('api/', include('objects.urls')),
     # path('api/', include('public.urls'))
+    path('api/user/send_verify_code', send_phone_verify_code_endpoint),
+    path('api/captcha', build_image_verify_code_endpoint)
 
 ]

@@ -21,7 +21,6 @@ from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_pho
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, Money, Quota
 from rgwadmin.exceptions import NoSuchUser
-from user.tokenauth import verify_permission
 
 import time
 
@@ -405,29 +404,6 @@ def get_user_detail_endpoint(request):
         'msg': 'success',
         'data': ser_data
     })
-
-
-@api_view(('GET',))
-@permission_classes((AllowAny,))
-def send_phone_verify_code_endpoint(request):
-    if request.method == 'GET':
-        try:
-            username = request.GET.get('username', None)
-            user = User.objects.select_related('profile').get(username=username)
-        except User.DoesNotExist:
-            raise NotFound('not found this user')
-
-        if not cache.get('phone_verify_code_%s' % user.profile.phone):
-            status_code, verify_code = send_phone_verify_code(user.profile.phone)
-            if status_code == 200:
-                cache.set('phone_verify_code_%s' % user.profile.phone, verify_code, 120)
-        else:
-            raise ParseError(detail='verification code already send')
-
-        return Response({
-            'code': 0,
-            'msg': 'success'
-        })
 
 
 @api_view(('POST',))

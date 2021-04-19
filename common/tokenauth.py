@@ -1,5 +1,5 @@
 from rest_framework.authentication import TokenAuthentication
-from .models import Profile
+from user.models import Profile
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions, HTTP_HEADER_ENCODING
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied

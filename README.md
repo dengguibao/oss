@@ -3,10 +3,10 @@
 ## install dependent
 install python3 environment
 #### centos
-> yum install python3 python3-pip python-memcached python-pylibmc memcached
+> yum install python3 python3-pip python-memcached python-pylibmc memcached libjpeg-turbo8
 
 #### ubuntu
-> apt install python3 python3-pip python-memcached python-pylibmc memcached
+> apt install python3 python3-pip python-memcached python-pylibmc memcached libjpeg-turbo8
 
 pip install project dependent  
 
