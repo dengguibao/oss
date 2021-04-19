@@ -9,7 +9,7 @@ build:
   tags:
     - dev-ubuntu
   script:
-    - pip3 install -r ./requirement.txt
+    # - pip3 install -r ./requirement.txt
     - python3 ./manage.py makemigrations
     - python3 ./manage.py migrate
 
