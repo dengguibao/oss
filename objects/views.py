@@ -57,7 +57,7 @@ def create_directory_endpoint(request):
     if bucket_perm == 'authenticated':
         allow_user_list = BucketAcl.objects. \
             filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
-            values_list('acl_bid')
+            values_list('user_id')
         # 在授权列表内，或者桶的拥有者均可以写操作
         if req_user.id not in allow_user_list and req_user != b.user:
             raise NotAuthenticated('current user not permission create directory')
@@ -136,7 +136,7 @@ def delete_object_endpoint(request):
     if obj_perm == 'authenticated':
         allow_user_list = BucketAcl.objects. \
             filter(bucket_id=o.bucket_id, permission='authenticated-read-write'). \
-            values_list('acl_bid')
+            values_list('user_id')
         # 桶拥有者、已授权用户、文件对象拥有者
         if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
             raise NotAuthenticated('current user not permission pub object')
@@ -208,11 +208,12 @@ def list_objects_endpoint(request):
     if bucket_perm == 'authenticated':
         allow_user = BucketAcl.objects. \
             filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
-            values_list('acl_bid')
+            values_list('user_id')
         # 已授权用户和桶拥有者可以列出文件
         allow_user_list = [i[0] for i in allow_user]
+        print(allow_user_list)
         if req_user.id not in allow_user_list and req_user != b.user:
-            raise NotAuthenticated('current user not permission pub object')
+            raise NotAuthenticated('current user not permission list object')
 
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
@@ -285,7 +286,7 @@ def put_object_endpoint(request):
     if bucket_perm == 'authenticated':
         allow_user_list = BucketAcl.objects.\
             filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
-            values_list('acl_bid')
+            values_list('user_id')
         allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、已授权用户
         if req_user.id not in allow_user_list and req_user != b.user:
@@ -427,7 +428,7 @@ def download_object_endpoint(request):
     if obj_perm == 'authenticated':
         allow_user_list = ObjectAcl.objects.\
             filter(object_id=obj.obj_id, permission__startswith='authenticated-read'). \
-            values_list('acl_oid')
+            values_list('user_id')
         allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、已授权、文件拥有者
         if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
@@ -473,7 +474,7 @@ def set_object_perm_endpoint(request):
     if o.permission == 'authenticated':
         allow_user_list = ObjectAcl.objects.\
             filter(object_id=o.obj_id, permission='authenticated-read-write'). \
-            values_list('acl_oid')
+            values_list('user_id')
         allow_user_list = [i[0] for i in allow_user_list]
         # 已授权列表、桶归属者、文件对象归属者
         if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
@@ -523,7 +524,7 @@ def query_object_perm_endpoint(request):
     if o.permission == 'authenticated':
         allow_user_list = ObjectAcl.objects. \
             filter(object_id=o.obj_id, permission__startswith='authenticated-read'). \
-            values_list('acl_oid')
+            values_list('user_id')
         allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、文件对象拥有者、已授权
         if request.user.id not in allow_user_list and request.user != o.bucket.user and request.user != o.owner:
@@ -635,7 +636,7 @@ def set_object_acl_endpoint(request):
             allow_user = BucketAcl.objects.filter(
                 bucket_id=o.bucket_id,
                 permission='authenticated-read-write'
-            ).values_list('acl_bid')
+            ).values_list('user_id')
             allow_user_list = [i[0] for i in allow_user]
             if req_user.id not in allow_user_list and req_user != o.owner and req_user != o.bucket.user:
                 raise ParseError('current user is not in allow access list')
