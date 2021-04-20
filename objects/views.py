@@ -206,11 +206,12 @@ def list_objects_endpoint(request):
             raise NotAuthenticated(detail='current user is not of the bucket owner')
 
     if bucket_perm == 'authenticated':
-        allow_write_user_list = BucketAcl.objects. \
+        allow_user = BucketAcl.objects. \
             filter(bucket_id=b.bucket_id, permission='authenticated-read-write'). \
             values_list('acl_bid')
         # 已授权用户和桶拥有者可以列出文件
-        if req_user.id not in allow_write_user_list and req_user != b.user:
+        allow_user_list = [i[0] for i in allow_user]
+        if req_user.id not in allow_user_list and req_user != b.user:
             raise NotAuthenticated('current user not permission pub object')
 
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
