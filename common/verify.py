@@ -45,7 +45,7 @@ def verify_field(data: bytes, field: tuple):
     if isinstance(data, bytes):
         try:
             data = json.loads(data.decode())
-        except AttributeError:
+        except json.decoder.JSONDecodeError:
             return 'request body is not a json'
 
     if isinstance(data, dict):
