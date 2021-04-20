@@ -12,6 +12,16 @@ import time
 
 class ExpireTokenAuthentication(TokenAuthentication):
     def authenticate(self, request):
+        client_ip = get_client_ip(request)
+        if not cache.get(client_ip):
+            cache.set(client_ip, 1, 1)
+
+        request_times = cache.get(client_ip)
+        cache.set(client_ip, request_times+1, 1)
+
+        if request_times >= 20:
+            raise exceptions.ParseError('request times too many')
+
         # 对外api使用access_key secret_key访问接口
         ak = request.GET.get('access_key', None)
         sk = request.GET.get('secret_key', None)

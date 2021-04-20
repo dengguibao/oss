@@ -32,7 +32,8 @@ def send_phone_verify_code_endpoint(request):
             'msg': 'success'
         })
 
-
+@api_view(('GET',))
+@permission_classes((AllowAny,))
 def build_image_verify_code_endpoint(request):
     captcha = Captcha.instance()
     txt, img = captcha.generate_captcha()
