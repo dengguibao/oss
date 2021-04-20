@@ -375,9 +375,11 @@ def set_bucket_perm_endpoint(request):
                 Bucket=b.name
             )
         # 更新本地数据库
-        b_acl = b.bucket_acl.get()
-        b_acl.permission = data['permission']
-        b_acl.save()
+        b.permission = data['permission']
+        b.save()
+        # b_acl = b.bucket_acl.get()
+        # b_acl.permission = data['permission']
+        # b_acl.save()
     except Exception as e:
         raise ParseError(detail=str(e))
 
