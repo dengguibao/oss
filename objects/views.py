@@ -211,7 +211,6 @@ def list_objects_endpoint(request):
             values_list('user_id')
         # 已授权用户和桶拥有者可以列出文件
         allow_user_list = [i[0] for i in allow_user]
-        print(allow_user_list)
         if req_user.id not in allow_user_list and req_user != b.user:
             raise NotAuthenticated('current user not permission list object')
 
@@ -290,13 +289,13 @@ def put_object_endpoint(request):
         allow_user_list = [i[0] for i in allow_user_list]
         # 桶拥有者、已授权用户
         if req_user.id not in allow_user_list and req_user != b.user:
-            raise NotAuthenticated('current user not permission pub object')
+            raise NotAuthenticated('current user not permission  object')
 
     object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
 
     if permission is None:
         permission = b.permission
-    if permission not in object_allow_acl:
+    if permission and permission not in object_allow_acl:
         raise ParseError('permission value has wrong!')
 
     # 验证路程是否为非常路径（目录）
