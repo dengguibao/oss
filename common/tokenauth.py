@@ -85,7 +85,6 @@ def verify_permission(model_name: str, app_label: str = None):
     """
     验证权限
     """
-
     def decorator(func):
         def wrapper(request, *args, **kwargs):
             perms_map = {
@@ -97,9 +96,8 @@ def verify_permission(model_name: str, app_label: str = None):
                 'PATCH': '{app_label}.change_{model_name}',
                 'DELETE': '{app_label}.delete_{model_name}',
             }
-            if not request.user and not request.user.is_authenticated:
+            if not request.user and not request.user.is_authenticated and not request.user.is_active:
                 raise NotAuthenticated('No login')
-
             r = resolve(request.path)
             perms = perms_map[request.method].format(
                 app_label=app_label if app_label else 'auth' if r.app_name == 'user' else r.app_name,
@@ -107,7 +105,7 @@ def verify_permission(model_name: str, app_label: str = None):
             )
             if request.user.has_perm(perms) and perms:
                 return func(request, *args, **kwargs)
-            raise PermissionDenied('Permission Denied!')
+            raise PermissionDenied('user or role don\'t have this permission')
 
         return wrapper
 

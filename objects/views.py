@@ -7,11 +7,14 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import api_view, permission_classes
 from django.conf import settings
 from django.http import StreamingHttpResponse
+from requests.exceptions import ConnectionError
 from django.contrib.auth.models import AnonymousUser
 from buckets.models import Buckets, BucketAcl
 from django.db.models import Q
 from django.contrib.auth.models import User
 from botocore.exceptions import ClientError
+
+from common.tokenauth import verify_permission
 from common.verify import (
     verify_object_name, verify_object_path,
     verify_bucket_name, verify_pk, verify_in_array,
@@ -249,6 +252,7 @@ def list_objects_endpoint(request):
 
 @api_view(('PUT',))
 @permission_classes((AllowAny,))
+@verify_permission(model_name='objects')
 def put_object_endpoint(request):
     req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
@@ -433,21 +437,39 @@ def download_object_endpoint(request):
         if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
             raise NotAuthenticated('current user not permission download the object')
 
-    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
     tmp = build_tmp_filename()
     try:
-        with open(tmp, 'wb') as fp:
-            s3.download_fileobj(
-                Bucket=obj.bucket.name,
-                Key=obj.key,
-                Fileobj=fp
-            )
-        res = StreamingHttpResponse(file_iter(tmp))
+        s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
+
+        file_size = obj.file_size
+
+        def file_content(size):
+            n = 0
+            # 下载带宽kB
+            bandwidth = 1024
+            while 1:
+                ret_data = s3.get_object(
+                    Bucket=obj.bucket.name,
+                    Key=obj.key,
+                    Range='bytes=%s-%s' % (n, n+bandwidth*1024-1),
+                )
+                n += bandwidth*1024
+                data = ret_data['Body'].read()
+                print(n)
+                time.sleep(1)
+                yield data
+                if n > file_size:
+                    break
+
+        res = StreamingHttpResponse(file_content(file_size))
         res['Content-Type'] = 'application/octet-stream'
         res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
         return res
+
     except ClientError:
         raise NotFound('not found object from ceph')
+    except ConnectionError:
+        raise ParseError('connection to server timeout')
 
 
 @api_view(('PUT',))

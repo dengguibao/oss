@@ -12,12 +12,13 @@ from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
+from common.tokenauth import verify_permission
 from common.verify import (
     verify_mail, verify_username,
     verify_phone, verify_length,
     verify_max_length, verify_max_value
 )
-from common.func import build_ceph_userinfo, rgw_client, get_client_ip, send_phone_verify_code, clean_post_data
+from common.func import build_ceph_userinfo, rgw_client, get_client_ip, clean_post_data
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, Money, Quota
 from rgwadmin.exceptions import NoSuchUser
@@ -578,5 +579,5 @@ def cache_request_user_meta_info(token_key, request):
     user = Token.objects.get(key=token_key).user
 
     # write token extra info to cache
-    cache.set('token_%s' % token_key, (ua, remote_ip, time.time(), user))
+    cache.set('token_%s' % token_key, (ua, remote_ip, time.time(), user), 3600)
     # print(cache.get('token_%s' % token_key))
