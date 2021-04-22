@@ -1,6 +1,8 @@
 import re
 import json
 
+from django.core.cache import cache
+
 
 def verify_phone(phone: str) -> bool:
     """
@@ -186,6 +188,37 @@ def verify_object_path(value: str) -> bool:
         return False
     if not re.match('^[\u4e00-\u9fa5a-zA-Z0-9,\\-_/]{1,2048}/$', value):
         return False
+    return True
+
+
+def verify_phone_verification_code(value: str, phone: str) -> bool:
+    """
+    验证用户输入的手机验证码是否正确
+    """
+    if not verify_length(value, 6):
+        return False
+
+    cached_verification_code = cache.get('phone_verify_code_%s' % phone)
+    if not cached_verification_code:
+        return False
+
+    if value != cached_verification_code:
+        return False
+
+    cache.delete('phone_verify_code_%s' % phone)
+    return True
+
+
+def verify_img_verification_code(value: str) -> bool:
+    """
+    验证图形验证码是否正确
+    """
+    if not verify_length(value, 5):
+        return False
+    cached_verification_code = cache.get('img_verify_code_%s' % value.upper())
+    if not cached_verification_code:
+        return False
+    cache.delete('img_verify_code_%s' % value.upper())
     return True
 
 

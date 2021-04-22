@@ -162,10 +162,12 @@ def set_buckets_endpoint(request):
             select_related('bucket_region')
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
+            # 查询已授到用户的所有桶列表
+            authorized_bucket = BucketAcl.objects.filter(user=req_user).values_list('bucket_id')
+            authorized_bucket_list = [i[0] for i in authorized_bucket]
             res = obj.filter(
                 Q(user=request.user) |
-                Q(user__username=req_user.profile.parent_uid) |
-                Q(user__username=req_user.profile.root_uid)
+                Q(bucket_id__in=authorized_bucket_list)
             )
         else:
             kw = request.GET.get('keyword', None)

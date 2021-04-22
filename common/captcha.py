@@ -66,9 +66,9 @@ class Captcha(object):
             Captcha._instance = Captcha()
         return Captcha._instance
 
-    def initialize(self, width=200, height=75, color=None, text=None, fonts=None):
+    def initialize(self, width=220, height=75, color=None, text=None, fonts=None):
         # self.image = Image.new('RGB', (width, height), (255, 255, 255))
-        self._text = text if text else random.sample(string.ascii_uppercase + string.ascii_uppercase + '3456789', 4)
+        self._text = text if text else random.sample(string.ascii_uppercase + '123456789', 5)
         self.fonts = fonts if fonts else \
             [os.path.join(self._dir, 'fonts', font) for font in ['Arial.ttf', 'Georgia.ttf', 'actionj.ttf']]
         self.width = width

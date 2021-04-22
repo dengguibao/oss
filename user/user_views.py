@@ -16,7 +16,8 @@ from common.tokenauth import verify_permission
 from common.verify import (
     verify_mail, verify_username,
     verify_phone, verify_length,
-    verify_max_length, verify_max_value
+    verify_max_length, verify_max_value,
+    verify_phone_verification_code, verify_img_verification_code
 )
 from common.func import build_ceph_userinfo, rgw_client, get_client_ip, clean_post_data
 from .serializer import UserSerialize, UserDetailSerialize
@@ -58,6 +59,7 @@ def create_user_endpoint(request):
         ('*email', str, verify_mail),
         ('*first_name', str, (verify_max_length, 8)),
         ('*phone', str, verify_phone),
+        ('verify_code', str, verify_img_verification_code)
     )
 
     data = clean_post_data(request.body, fields)
@@ -130,15 +132,9 @@ def user_login_endpoint(request):
     except User.DoesNotExist:
         raise NotFound('not found this user')
 
-    # -------------- login phone verify ------------
-    # verify_code = cache.get('phone_verify_code_%s' % u.profile.phone)
-    # if not verify_code:
-    #     raise ParseError(detail='get phone verification code failed')
-    #
-    # if verify_code != data['verify_code']:
-    #     raise ParseError(detail='phone verification code has wrong!')
-    # cache.delete('phone_verify_code_%s' % u.profile.phone)
-    # ------------- end ------------------
+    # if not verify_phone_verification_code(data['verify_code'], u.profile.phone):
+    #     raise ParseError('phone verification code is wrong!')
+
     user = authenticate(username=data['username'], password=data['password'])
     if not user or not user.is_active:
         raise ParseError(detail='username or password has wrong!')

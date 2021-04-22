@@ -437,7 +437,6 @@ def download_object_endpoint(request):
         if request.user.id not in allow_user_list and request.user != obj.bucket.user and request.user != obj.owner:
             raise NotAuthenticated('current user not permission download the object')
 
-    tmp = build_tmp_filename()
     try:
         s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
 
@@ -445,18 +444,27 @@ def download_object_endpoint(request):
 
         def file_content(size):
             n = 0
-            # 下载带宽kB
-            bandwidth = 1024
+            transfer_count = 0
+            ts = time.time()
+            min_unit = 1024**2
+            # 下载带宽MB
+            bandwidth = 3
             while 1:
+                # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
                 ret_data = s3.get_object(
                     Bucket=obj.bucket.name,
                     Key=obj.key,
-                    Range='bytes=%s-%s' % (n, n+bandwidth*1024-1),
+                    Range='bytes=%s-%s' % (n, n+min_unit-1),
                 )
-                n += bandwidth*1024
+                n += min_unit
                 data = ret_data['Body'].read()
-                print(n)
-                time.sleep(1)
+                transfer_count += min_unit
+                # print('already_transfer:', transfer_count, 'bandwidth_transfer:', bandwidth*min_unit, time.time()-ts)
+                if transfer_count >= bandwidth*min_unit:
+                    if time.time()-ts < 1:
+                        time.sleep(1-(time.time()-ts))
+                        ts = time.time()
+                    transfer_count = 0
                 yield data
                 if n > file_size:
                     break
@@ -467,9 +475,9 @@ def download_object_endpoint(request):
         return res
 
     except ClientError:
-        raise NotFound('not found object from ceph')
+        raise NotFound('client error')
     except ConnectionError:
-        raise ParseError('connection to server timeout')
+        raise ParseError('connection to upstream server timeout')
 
 
 @api_view(('PUT',))
@@ -502,6 +510,7 @@ def set_object_perm_endpoint(request):
             raise NotAuthenticated('you are not in the allow access list')
 
     try:
+        # 当权限为authenticated时，不推送到后端上游服务器
         if 'authenticated' not in data['permission']:
             s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.user.username)
             s3.put_object_acl(
