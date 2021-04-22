@@ -367,6 +367,7 @@ def get_user_detail_endpoint(request):
 
     try:
         user_id = request.GET.get('user_id', None)
+        if not user_id: user_id = request.user.id
         u = User.objects.select_related('profile').select_related('quota').select_related('money').get(id=user_id)
         b = Buckets.objects.filter(user=user_id).values()
     except Profile.DoesNotExist:
@@ -382,12 +383,6 @@ def get_user_detail_endpoint(request):
             u.username != req_username and \
             u.profile.parent_uid != req_username:
         raise NotAuthenticated(detail='permission denied!')
-
-    # u_d = model_to_dict(u)
-    # p_d = model_to_dict(p)
-    # m_d = model_to_dict(m)
-    #
-    # del u_d['password'], m_d['id'], p_d['id']
 
     ser = UserDetailSerialize(u)
     ser_data = ser.data
@@ -485,7 +480,6 @@ def query_user_exist_endpoint(request):
 
 
 @api_view(("GET",))
-@permission_classes((AllowAny,))
 def query_user_usage(request):
     """
     查询用户流量及使情情况
@@ -522,6 +516,7 @@ def query_user_usage(request):
             continue
         except ConnectionError:
             continue
+
         # print(start_time, end_time, u.profile.ceph_uid)
 
         def build_usage_data(origin_data):
@@ -546,7 +541,7 @@ def query_user_usage(request):
                         buff[time]['get_obj']['successful_ops'] += cate['successful_ops']
                         buff[time]['get_obj']['bytes_sent'] += cate['bytes_sent']
             s_key = sorted(buff)
-            return {k: buff[k]for k in s_key}
+            return {k: buff[k] for k in s_key}
 
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,

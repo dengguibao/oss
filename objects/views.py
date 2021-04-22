@@ -27,7 +27,6 @@ import hashlib
 
 
 @api_view(('POST',))
-@permission_classes((AllowAny,))
 def create_directory_endpoint(request):
     """
     在指定的bucket内创建目录
@@ -105,7 +104,6 @@ def create_directory_endpoint(request):
 
 
 @api_view(('DELETE',))
-@permission_classes((AllowAny,))
 def delete_object_endpoint(request):
     """
     删除文件对象
@@ -184,7 +182,6 @@ def delete_object_endpoint(request):
 
 
 @api_view(('GET',))
-@permission_classes((AllowAny,))
 def list_objects_endpoint(request):
     """
     列出桶内的所有文件对象和目录
@@ -251,7 +248,6 @@ def list_objects_endpoint(request):
 
 
 @api_view(('PUT',))
-@permission_classes((AllowAny,))
 @verify_permission(model_name='objects')
 def put_object_endpoint(request):
     req_user = request.user
@@ -403,7 +399,6 @@ def put_object_endpoint(request):
 
 
 @api_view(('GET',))
-@permission_classes((AllowAny,))
 def download_object_endpoint(request):
     """
     下载指定桶内的指定的文件对象，只能是文件，目录不能下载

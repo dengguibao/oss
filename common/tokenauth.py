@@ -34,16 +34,19 @@ class ExpireTokenAuthentication(TokenAuthentication):
             raise exceptions.ParseError('your operation frequency is too high')
 
         # 对外api使用access_key secret_key访问接口
-        ak = request.GET.get('access_key', None)
-        sk = request.GET.get('secret_key', None)
-        if ak and sk:
-            try:
-                p = Profile.objects.get(access_key=ak, secret_key=sk)
-            except Profile.DoesNotExist:
-                p = None
+        # 对外api可以不需要token，直接利用ak/sk找到对应的用户，然后进行default_permission检查
+        # default_permission设置为IsAuthenticated，即只需要登陆即可
+        if request.path.startswith('/api/objects'):
+            ak = request.GET.get('access_key', None)
+            sk = request.GET.get('secret_key', None)
+            if ak and sk:
+                try:
+                    p = Profile.objects.get(access_key=ak, secret_key=sk)
+                except Profile.DoesNotExist:
+                    p = None
 
-            if p and p.user.is_active and request.META['PATH_INFO'].startswith('/api/objects'):
-                return p.user, None
+                if p and p.user.is_active:
+                    return p.user, None
 
         auth = request.META.get('HTTP_AUTHORIZATION', b'')
         if isinstance(auth, str):
@@ -51,12 +54,15 @@ class ExpireTokenAuthentication(TokenAuthentication):
             auth = auth.encode(HTTP_HEADER_ENCODING)
 
         auth = auth.split()
-        if not auth or auth[0].lower() != self.keyword.lower().encode():
+
+        # 如果header中没有token，则返回None, 然后使用permission_class进行权限检查
+        if not auth or auth[0].lower() != b'token':
             return None
 
         if len(auth) == 1:
             msg = _('Invalid token header. No credentials provided.')
             raise exceptions.AuthenticationFailed(msg)
+
         elif len(auth) > 2:
             msg = _('Invalid token header. Token string should not contain spaces.')
             raise exceptions.AuthenticationFailed(msg)
@@ -76,17 +82,17 @@ class ExpireTokenAuthentication(TokenAuthentication):
 
         cache_token = cache.get('token_%s' % key)
         if not cache_token:
-            raise exceptions.AuthenticationFailed(_('Invalid token.'))
+            raise exceptions.AuthenticationFailed(_('Invalid token. '))
 
         cache_ua, cache_ip, cache_latest_time, cache_user = cache_token
         if cache_ua != ua:
-            raise exceptions.AuthenticationFailed(_('UA not match.'))
+            raise exceptions.AuthenticationFailed(_('Invalid token. UserAgent not match.'))
 
         if cache_ip != client_ip:
-            raise exceptions.AuthenticationFailed(_('Client ip error.'))
+            raise exceptions.AuthenticationFailed(_('Invalid Token. Client ip error.'))
 
         if time.time() - cache_latest_time > settings.TOKEN_EXPIRE_TIME:
-            raise exceptions.AuthenticationFailed(_('Token expire.'))
+            raise exceptions.AuthenticationFailed(_('Invalid token. Token expire.'))
 
         cache.set('token_%s' % key, (cache_ua, cache_ip, time.time(), cache_user))
         return cache_user, None
