@@ -10,6 +10,7 @@ from django.conf import settings
 from requests.exceptions import ConnectionError
 from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
 from buckets.models import BucketRegion, Buckets
 from common.tokenauth import verify_permission
@@ -126,18 +127,34 @@ def user_login_endpoint(request):
     )
 
     data = clean_post_data(request.body, fields)
+    # 因为用户名与手机号码均为唯一字段，所以一下条件只会有一个成立
+    try:
+        u = User.objects.select_related('profile').get(username=data['username'])
+    except User.DoesNotExist:
+        u = None
 
     try:
-        u = User.objects.get(username=data['username'])
-    except User.DoesNotExist:
+        p = Profile.objects.select_related('user').get(phone=data['username'])
+    except Profile.DoesNotExist:
+        p = None
+
+    if not u and not p:
         raise NotFound('not found this user')
 
-    # if not verify_phone_verification_code(data['verify_code'], u.profile.phone):
-    #     raise ParseError('phone verification code is wrong!')
+    user = None
+    if u:
+        user = u
+    if p:
+        user = p.user
 
-    user = authenticate(username=data['username'], password=data['password'])
-    if not user or not user.is_active:
-        raise ParseError(detail='username or password has wrong!')
+    if not user.is_active:
+        raise ParseError('user is inactive')
+
+    if not authenticate(username=user.username, password=data['password']):
+        raise ParseError('username or password is wrong')
+
+    # if not verify_phone_verification_code(data['verify_code'], user.profile.phone):
+    #     raise ParseError('phone verification code is wrong!')
 
     try:
         t = Token.objects.get(user=user)
