@@ -506,16 +506,42 @@ def query_user_usage(request):
         except ConnectionError:
             continue
         # print(start_time, end_time, u.profile.ceph_uid)
+
+        def build_usage_data(origin_data):
+            buff = {}
+            for bucket in origin_data['entries'][0]['buckets']:
+                time = bucket['time'][:10]
+                buff[time] = {
+                    'get_obj': {
+                        'successful_ops': 0,
+                        'bytes_sent': 0,
+                    },
+                    'put_obj': {
+                        'successful_ops': 0,
+                        'bytes_received': 0,
+                    },
+                }
+                for cate in bucket['categories']:
+                    if 'category' in cate and cate['category'] == 'put_obj':
+                        buff[time]['put_obj']['successful_ops'] += cate['successful_ops']
+                        buff[time]['put_obj']['bytes_received'] += cate['bytes_received']
+                    if 'category' in cate and cate['category'] == 'get_obj':
+                        buff[time]['get_obj']['successful_ops'] += cate['successful_ops']
+                        buff[time]['get_obj']['bytes_sent'] += cate['bytes_sent']
+            s_key = sorted(buff)
+            return {k: buff[k]for k in s_key}
+
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,
             start=start_time,
             end=end_time,
             show_summary=True,
-            # show_entries=True
+            show_entries=True
         )
         usage_data.append({
             'region': i.name,
-            'usage_data': data
+            'usage_data': build_usage_data(data),
+            'summary': data['summary']
         })
 
     return Response({

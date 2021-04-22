@@ -448,7 +448,7 @@ def download_object_endpoint(request):
             ts = time.time()
             min_unit = 1024**2
             # 下载带宽MB
-            bandwidth = 3
+            bandwidth = 4 if isinstance(request.user, AnonymousUser) else request.user.profile.bandwidth
             while 1:
                 # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
                 ret_data = s3.get_object(

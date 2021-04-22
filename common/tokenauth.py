@@ -13,14 +13,25 @@ import time
 class ExpireTokenAuthentication(TokenAuthentication):
     def authenticate(self, request):
         client_ip = get_client_ip(request)
+        block_key = 'block_ip_%s' % client_ip
+        block_times = cache.get(block_key)
+        if block_times and block_times >= 2:
+            raise exceptions.APIException('your ip address is blocked, will be auto resume after 2 hours')
+
+        # 记录1秒内某个ip的请求频率
         if not cache.get(client_ip):
             cache.set(client_ip, 1, 1)
-
         request_times = cache.get(client_ip)
         cache.set(client_ip, request_times+1, 1)
 
-        if request_times >= 20:
-            raise exceptions.ParseError('request times too many')
+        # 当1秒内请求次数超过20次，将ip列入黑名单，加入黑名单次数达到2次后，禁止该ip访问
+        # print(request_times)
+        if request_times >= 30:
+            if not block_times:
+                block_times = 0
+            cache.set(block_key, block_times+1, 7200)
+            # 第一次提醒用户超过频率太高
+            raise exceptions.ParseError('your operation frequency is too high')
 
         # 对外api使用access_key secret_key访问接口
         ak = request.GET.get('access_key', None)

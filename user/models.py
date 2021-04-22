@@ -21,6 +21,7 @@ class Profile(models.Model):
                                 null=True, blank=True, default=None)
     level = models.IntegerField(verbose_name='user level, max allow 3 leve',
                                 default=0, blank=False, null=False)
+    bandwidth = models.IntegerField(verbose_name='user download bandwidth', default=4, blank=False)
     is_subuser = models.BooleanField(verbose_name='is sub user', default=False, blank=False)
 
     def __str__(self):
