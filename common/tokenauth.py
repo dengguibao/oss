@@ -1,4 +1,4 @@
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import BaseAuthentication
 from user.models import Profile
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions, HTTP_HEADER_ENCODING
@@ -10,7 +10,7 @@ from django.urls import resolve
 import time
 
 
-class ExpireTokenAuthentication(TokenAuthentication):
+class TokenAuthentication(BaseAuthentication):
     def authenticate(self, request):
         client_ip = get_client_ip(request)
         block_key = 'block_ip_%s' % client_ip

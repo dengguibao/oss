@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.http import HttpResponse, FileResponse
+from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ParseError, NotFound
 from rest_framework.permissions import AllowAny
