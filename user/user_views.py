@@ -497,8 +497,11 @@ def query_user_usage(request):
     except User.DoesNotExist:
         pass
 
-    if not u or (u != req_user and not req_user.is_superuser):
+    if not u:
         raise NotFound(detail='not fount this user')
+
+    if u != req_user and not req_user.is_superuser:
+        raise NotAuthenticated('permission denied!')
 
     if not start_time or not check_date_format(start_time):
         start_time = time.strftime(fmt, time.localtime(time.time() - 86400))
@@ -518,12 +521,11 @@ def query_user_usage(request):
             continue
 
         # print(start_time, end_time, u.profile.ceph_uid)
-
         def build_usage_data(origin_data):
             buff = {}
             for bucket in origin_data['entries'][0]['buckets']:
-                time = bucket['time'][:10]
-                buff[time] = {
+                act_time = bucket['time'][:10]
+                buff[act_time] = {
                     'get_obj': {
                         'successful_ops': 0,
                         'bytes_sent': 0,
@@ -535,13 +537,21 @@ def query_user_usage(request):
                 }
                 for cate in bucket['categories']:
                     if 'category' in cate and cate['category'] == 'put_obj':
-                        buff[time]['put_obj']['successful_ops'] += cate['successful_ops']
-                        buff[time]['put_obj']['bytes_received'] += cate['bytes_received']
+                        buff[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
+                        buff[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
                     if 'category' in cate and cate['category'] == 'get_obj':
-                        buff[time]['get_obj']['successful_ops'] += cate['successful_ops']
-                        buff[time]['get_obj']['bytes_sent'] += cate['bytes_sent']
+                        buff[act_time]['get_obj']['successful_ops'] += cate['successful_ops']
+                        buff[act_time]['get_obj']['bytes_sent'] += cate['bytes_sent']
             s_key = sorted(buff)
-            return {k: buff[k] for k in s_key}
+            __data = []
+            for k in s_key:
+                __tmp = {
+                    'data': k
+                }
+                __tmp.update(buff[k])
+                __data.append(__tmp)
+                del __tmp
+            return __data
 
         data = rgw.get_usage(
             uid=u.profile.ceph_uid,
