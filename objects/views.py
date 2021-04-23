@@ -1,5 +1,4 @@
 import time
-from rest_framework.permissions import AllowAny
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.exceptions import ParseError, NotAuthenticated, NotFound
 from rest_framework.response import Response
@@ -20,7 +19,7 @@ from common.verify import (
     verify_bucket_name, verify_pk, verify_in_array,
     verify_username
 )
-from common.func import verify_path, build_tmp_filename, file_iter, s3_client, clean_post_data
+from common.func import verify_path, s3_client, clean_post_data
 from .serializer import ObjectsSerialize
 from .models import Objects, ObjectAcl
 import hashlib
