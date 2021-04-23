@@ -1,0 +1,16 @@
+2021-04-23 09:22:29,025 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:22:30,973 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:23:23,046 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:24:55,341 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:24:56,074 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:24:56,519 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:24:56,884 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:24:57,194 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 200, reason_phrase: OK
+2021-04-23 09:26:29,819 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '12356'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 400, reason_phrase: Bad Request
+2021-04-23 09:26:29,819 [WARNING] Bad Request: /api/user/login
+2021-04-23 09:29:50,867 [INFO] /Users/degguibao/PycharmProjects/oss/oss/settings.py changed, reloading.
+2021-04-23 09:29:56,339 [INFO] /Users/degguibao/PycharmProjects/oss/oss/settings.py changed, reloading.
+2021-04-23 09:30:07,767 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '12356'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 400, reason_phrase: Bad Request
+2021-04-23 09:30:07,768 [WARNING] Bad Request: /api/user/login
+2021-04-23 09:30:08,585 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '12356'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, destination_ip: 127.0.0.1, response_status_code: 400, reason_phrase: Bad Request
+2021-04-23 09:30:08,586 [WARNING] Bad Request: /api/user/login
