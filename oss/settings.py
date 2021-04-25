@@ -9,6 +9,8 @@ https://docs.djangoproject.com/en/3.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
+import logging
+from logging import handlers
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -36,7 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'user',
     'objects',
-    # 'public',
+    'common',
     'rest_framework.authtoken',
     'corsheaders',
     'buckets'
@@ -173,3 +175,18 @@ CORS_ALLOW_HEADERS = (
     'x-csrftoken',
     'x-requested-with'
 )
+
+
+def get_logger():
+    logger = logging.getLogger(__name__)
+    log_filename = './logs/web.log'
+    th = handlers.TimedRotatingFileHandler(log_filename, when='MIDNIGHT', interval=1, encoding='utf-8')
+    log_fmt = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    th.setFormatter(log_fmt)
+    th.suffix = '%Y%m%d.log'
+    logger.setLevel(logging.INFO)
+    logger.addHandler(th)
+    return logger
+
+
+LOGGER = get_logger()

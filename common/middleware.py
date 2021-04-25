@@ -1,40 +1,16 @@
-import os
-import socket
-import time
 from django.contrib.auth.models import AnonymousUser
 from django.utils.deprecation import MiddlewareMixin
 import json
-import logging
-from logging import handlers
 from .func import get_client_ip
-
-
-# import threading
-
-# local = threading.local()
+from django.conf import settings
 
 
 class RequestLogMiddleware(MiddlewareMixin):
 
     def __init__(self, get_response=None):
+        super().__init__(get_response)
         self.get_response = get_response
-        # self.apiLogger = logging.getLogger('./logs/web.log')
-
-        logger = logging.getLogger()
-        log_filename = './logs/web.log'
-
-        # fh = logging.FileHandler(log_filename, encoding='utf-8', mode='a')
-        th = handlers.TimedRotatingFileHandler(log_filename, when='MIDNIGHT', interval=1, encoding='utf-8')
-
-        log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-        th.setFormatter(log_format)
-
-        th.suffix = '%Y%m%d.log'
-
-        logger.setLevel(logging.INFO)
-        # logger.addHandler(fh)
-        logger.addHandler(th)
-        self.logger = logger
+        self.logger = settings.LOGGER
 
     def __call__(self, request):
 
