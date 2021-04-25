@@ -1,4 +1,6 @@
 import time
+
+from rest_framework.permissions import AllowAny
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.exceptions import ParseError, NotAuthenticated, NotFound
 from rest_framework.response import Response
@@ -26,6 +28,7 @@ import hashlib
 
 
 @api_view(('POST',))
+@permission_classes((AllowAny,))
 def create_directory_endpoint(request):
     """
     在指定的bucket内创建目录
@@ -103,6 +106,7 @@ def create_directory_endpoint(request):
 
 
 @api_view(('DELETE',))
+@permission_classes((AllowAny,))
 def delete_object_endpoint(request):
     """
     删除文件对象
@@ -110,8 +114,11 @@ def delete_object_endpoint(request):
     req_user = request.user
     # 验证obj_id是否为非法id
     try:
-        obj_id = request.GET.get('obj_id', 0)
-        o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=int(obj_id))
+        bucket_name = request.GET.get('bucket_name', None)
+        key = request.GET.get('key', None).replace(',', '/')
+        o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(
+            bucket__name=bucket_name, key=key
+        )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
@@ -181,6 +188,7 @@ def delete_object_endpoint(request):
 
 
 @api_view(('GET',))
+@permission_classes((AllowAny,))
 def list_objects_endpoint(request):
     """
     列出桶内的所有文件对象和目录
@@ -248,6 +256,7 @@ def list_objects_endpoint(request):
 
 @api_view(('PUT',))
 @verify_permission(model_name='objects')
+@permission_classes((AllowAny,))
 def put_object_endpoint(request):
     req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
@@ -292,7 +301,7 @@ def put_object_endpoint(request):
 
     object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
 
-    if permission is None:
+    if len(permission) == 0:
         permission = b.permission
     if permission and permission not in object_allow_acl:
         raise ParseError('permission value has wrong!')
@@ -398,13 +407,17 @@ def put_object_endpoint(request):
 
 
 @api_view(('GET',))
+@permission_classes((AllowAny,))
 def download_object_endpoint(request):
     """
     下载指定桶内的指定的文件对象，只能是文件，目录不能下载
     """
     try:
-        obj_id = int(request.GET.get('obj_id', None))
-        obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(obj_id=obj_id)
+        bucket_name = request.GET.get('bucket_name', None)
+        key = request.GET.get('key', None).replace(',', '/')
+        obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
+            bucket__name=bucket_name, key=key
+        )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 

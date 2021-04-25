@@ -6,6 +6,7 @@ from django.utils.deprecation import MiddlewareMixin
 import json
 import logging
 from logging import handlers
+from .func import get_client_ip
 
 
 # import threading
@@ -28,7 +29,7 @@ class RequestLogMiddleware(MiddlewareMixin):
         log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
         th.setFormatter(log_format)
 
-        th.suffix = '.%Y%m%d.log'
+        th.suffix = '%Y%m%d.log'
 
         logger.setLevel(logging.INFO)
         # logger.addHandler(fh)
@@ -52,23 +53,24 @@ class RequestLogMiddleware(MiddlewareMixin):
 
         query_string = request.META['QUERY_STRING']
         if query_string:
-            url = request.path+'?='+query_string
+            url = request.path+'?'+query_string
         else:
             url = request.path
         msg = {
             'body': None if not body else json.dumps(body, ensure_ascii=False).replace('"', '\''),
             'url': url,
             'user': request.user.username if not isinstance(request.user, AnonymousUser) else 'AnonymousUser',
-            'source_ip': request.META.get('REMOTE_ADDR', ''),
-            'destination_ip': socket.gethostbyname(socket.gethostname()),
+            'source_ip': get_client_ip(request),
+            # 'destination_ip': socket.gethostbyname(socket.gethostname()),
             'response_status_code': response.status_code,
-            'reason_phrase': response.reason_phrase
+            'content-length': len(response.content) if hasattr(response, 'content') else -1
         }
         self.logger.info(json.dumps(msg, ensure_ascii=False)[1:-1].replace('"', ''))
 
         return response
 
-    def filter_secure_data(self,body: dict, fields: tuple) -> dict:
+    @staticmethod
+    def filter_secure_data(body: dict, fields: tuple) -> dict:
         for f in fields:
             if f in body:
                 body[f] = '******'
