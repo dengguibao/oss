@@ -114,8 +114,8 @@ def delete_object_endpoint(request):
     req_user = request.user
     # 验证obj_id是否为非法id
     try:
-        bucket_name = request.GET.get('bucket_name', None)
-        key = request.GET.get('key', None).replace(',', '/')
+        bucket_name = request.GET.get('bucket_name', '')
+        key = request.GET.get('key', '').replace(',', '/')
         o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(
             bucket__name=bucket_name, key=key
         )
@@ -413,8 +413,8 @@ def download_object_endpoint(request):
     下载指定桶内的指定的文件对象，只能是文件，目录不能下载
     """
     try:
-        bucket_name = request.GET.get('bucket_name', None)
-        key = request.GET.get('key', None).replace(',', '/')
+        bucket_name = request.GET.get('bucket_name', '')
+        key = request.GET.get('key', '').replace(',', '/')
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
             bucket__name=bucket_name, key=key
         )

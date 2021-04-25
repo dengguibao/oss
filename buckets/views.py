@@ -87,6 +87,7 @@ def set_bucket_region_endpoint(request):
         ('*secret_key', str, (verify_max_length, 50)),
         ('*access_key', str, (verify_max_length, 32)),
         ('*server', str, (verify_max_length, 20)),
+        ('*state', str, (verify_in_array, ('e', 'd', 's')))
     ]
     id_field = (
         ('*reg_id', int, (verify_pk, model)),
@@ -130,13 +131,9 @@ def set_bucket_region_endpoint(request):
 
         # post请求，用来创建对象
         if request.method == 'PUT':
-            off = model.objects.get(reg_id=data['reg_id'])
-            # print(off, data)
-            off.name = data['name']
-            off.access_key = data['access_key']
-            off.secret_key = data['secret_key']
-            off.server = data['server']
-            off.save()
+            region = model.objects.get(reg_id=data['reg_id'])
+            region.__dict__.update(**data)
+            region.save()
 
         if request.method == 'DELETE':
             model.objects.get(reg_id=data['reg_id']).delete()
@@ -251,9 +248,9 @@ def set_buckets_endpoint(request):
             if not q or not q.calculate_valid_date():
                 raise ParseError(detail='user capacity not enough')
 
-            data['user_id'] = req_user.id
-            data['start_time'] = int(time.time())
-            data['state'] = 'e'
+            bucket_region = BucketRegion.objects.get(pk=data['bucket_region_id'])
+            if bucket_region.state != 'e':
+                raise ParseError('region is not enable state')
 
             # 使用用户key创建bucket
             s3 = s3_client(data['bucket_region_id'], req_user.username)
@@ -280,7 +277,6 @@ def set_buckets_endpoint(request):
                 user=req_user,
                 permission=data['permission'],
                 start_time=int(time.time()),
-                state='e'
             )
 
         if request.method == 'DELETE':

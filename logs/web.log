@@ -281,3 +281,125 @@ TypeError: argument of type 'NoneType' is not iterable
 2021-04-25 02:56:41,444 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
 2021-04-25 02:56:45,931 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
 2021-04-25 02:56:47,586 [INFO] body: null, url: /api/objects/download_file?key=scrt-9.0.0-2430.osx_x64.dmg&bucket_name=testtest&=, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
+2021-04-25 03:19:18,309 [INFO] body: null, url: /, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 2360
+2021-04-25 03:19:18,311 [WARNING] Not Found: /
+2021-04-25 03:19:20,027 [ERROR] Internal Server Error: /api/objects/download_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/views/generic/base.py", line 70, in view
+    return self.dispatch(request, *args, **kwargs)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/rest_framework/views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/rest_framework/views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/rest_framework/views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/rest_framework/views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/rest_framework/decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+  File "/Users/degguibao/PycharmProjects/oss/objects/views.py", line 417, in download_object_endpoint
+    key = request.GET.get('key', None).replace(',', '/')
+AttributeError: 'NoneType' object has no attribute 'replace'
+2021-04-25 03:19:20,037 [INFO] body: null, url: /api/objects/download_file?obj_id=38, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 500, content-length: 90852
+2021-04-25 03:20:16,924 [INFO] /Users/degguibao/PycharmProjects/oss/objects/views.py changed, reloading.
+2021-04-25 03:20:36,617 [INFO] body: null, url: /api/objects/download_file?obj_id=38, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 43
+2021-04-25 03:20:36,618 [WARNING] Not Found: /api/objects/download_file
+2021-04-25 03:20:44,025 [INFO] body: null, url: /api/objects/download_file?obj_id=38, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 43
+2021-04-25 03:20:44,026 [WARNING] Not Found: /api/objects/download_file
+2021-04-25 03:21:13,642 [INFO] body: null, url: /api/objects/download_file?bucket_name=test&key=scrt-9.0.0-2430.osx_x64.dmg, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 43
+2021-04-25 03:21:13,642 [WARNING] Not Found: /api/objects/download_file
+2021-04-25 03:21:13,683 [INFO] body: null, url: /favicon.ico, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 2411
+2021-04-25 03:21:13,683 [WARNING] Not Found: /favicon.ico
+2021-04-25 03:21:17,985 [INFO] body: null, url: /api/objects/download_file?bucket_name=test&key=scrt-9.0.0-2430.osx_x64.dmg, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 404, content-length: 43
+2021-04-25 03:21:17,986 [WARNING] Not Found: /api/objects/download_file
+2021-04-25 03:21:24,346 [INFO] body: null, url: /api/objects/download_file?bucket_name=testtest&key=scrt-9.0.0-2430.osx_x64.dmg, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
+2021-04-25 03:22:00,138 [INFO] body: null, url: /api/objects/download_file?bucket_name=testtest&key=scrt-9.0.0-2430.osx_x64.dmg, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
+2021-04-25 03:28:37,559 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/models.py changed, reloading.
+2021-04-25 03:32:53,877 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:40:49,443 [INFO] /Users/degguibao/PycharmProjects/oss/common/verify.py changed, reloading.
+2021-04-25 03:40:52,026 [INFO] /Users/degguibao/PycharmProjects/oss/common/verify.py changed, reloading.
+2021-04-25 03:42:30,361 [INFO] /Users/degguibao/PycharmProjects/oss/common/verify.py changed, reloading.
+2021-04-25 03:42:53,231 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:45:04,193 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:45:27,821 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '123456'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 222
+2021-04-25 03:46:31,147 [INFO] body: {'name': 'dgbtest', 'permission': 'private', 'bucket_region_id': 1, 'version_control': false}, url: /api/buckets/bucket, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 37
+2021-04-25 03:46:31,148 [WARNING] Bad Request: /api/buckets/bucket
+2021-04-25 03:46:36,684 [INFO] body: {'name': 'dgbtest', 'permission': 'private', 'bucket_region_id': 1, 'version_control': false}, url: /api/buckets/bucket, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 37
+2021-04-25 03:46:36,684 [WARNING] Bad Request: /api/buckets/bucket
+2021-04-25 03:48:59,164 [INFO] body: {'name': 'dgbtest', 'permission': 'private', 'bucket_region_id': 1, 'version_control': false}, url: /api/buckets/bucket, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 03:50:25,344 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:50:35,081 [INFO] body: null, url: /api/buckets/bucket?page=1&size=10&keyword=, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 3887
+2021-04-25 03:51:07,594 [INFO] body: {'bucket_id': 18}, url: /api/buckets/bucket, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:52:26,575 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:53:36,042 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 39
+2021-04-25 03:53:36,042 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:53:40,663 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:53:46,902 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'f'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 39
+2021-04-25 03:53:46,903 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:54:29,998 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:54:33,675 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 60
+2021-04-25 03:54:33,675 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:54:35,042 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 60
+2021-04-25 03:54:35,042 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:55:01,242 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:55:02,861 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 54
+2021-04-25 03:55:02,861 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:55:10,028 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:55:11,165 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:55:33,924 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:55:35,560 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:55:39,766 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:55:42,373 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:55:46,838 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:55:48,602 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:55:52,626 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:55:53,248 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:55:53,402 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:55:53,701 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:56:55,082 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:56:57,268 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:56:59,097 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 60
+2021-04-25 03:56:59,097 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:56:59,971 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 60
+2021-04-25 03:56:59,971 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:57:42,891 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 60
+2021-04-25 03:57:42,891 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 03:59:01,032 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 03:59:03,520 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 03:59:05,402 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 03:59:32,312 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/models.py changed, reloading.
+2021-04-25 04:00:06,515 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 04:00:07,836 [INFO] body: null, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 414
+2021-04-25 04:00:09,696 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:00:09,697 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:00:12,311 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:00:12,312 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:00:20,049 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:00:20,049 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:00:33,506 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/models.py changed, reloading.
+2021-04-25 04:16:47,661 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 403, content-length: 41
+2021-04-25 04:16:47,662 [WARNING] Forbidden: /api/buckets/region
+2021-04-25 04:16:57,432 [INFO] body: null, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 39
+2021-04-25 04:16:57,433 [WARNING] Bad Request: /api/user/login
+2021-04-25 04:17:11,745 [INFO] body: {'username': 'testuser', 'password': '******', 'verify_code': '481111'}, url: /api/user/login, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 222
+2021-04-25 04:17:23,890 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:17:23,891 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:17:30,633 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:17:30,634 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:17:36,787 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 40
+2021-04-25 04:17:36,788 [WARNING] Bad Request: /api/buckets/region
+2021-04-25 04:18:26,297 [INFO] /Users/degguibao/PycharmProjects/oss/common/verify.py changed, reloading.
+2021-04-25 04:18:29,347 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 04:18:48,990 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 04:18:54,343 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'e'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 04:20:36,203 [INFO] /Users/degguibao/PycharmProjects/oss/buckets/views.py changed, reloading.
+2021-04-25 04:20:48,058 [INFO] body: {'reg_id': 2, 'name': '益阳测试-2', 'secret_key': 'Admin@123', 'access_key': 'admin', 'server': '10.10.0.215:7480', 'state': 'd'}, url: /api/buckets/region, user: testuser, source_ip: 127.0.0.1, response_status_code: 200, content-length: 26
+2021-04-25 04:22:57,185 [INFO] body: {'name': 'testabcd', 'permission': 'private', 'bucket_region_id': 2, 'version_control': true}, url: /api/buckets/bucket, user: testuser, source_ip: 127.0.0.1, response_status_code: 400, content-length: 39
+2021-04-25 04:22:57,185 [WARNING] Bad Request: /api/buckets/bucket
+2021-04-25 04:23:14,058 [INFO] /Users/degguibao/PycharmProjects/oss/common/verify.py changed, reloading.

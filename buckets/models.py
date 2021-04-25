@@ -4,11 +4,17 @@ import time
 
 
 class BucketRegion(models.Model):
+    STATE = (
+        ('e', 'enable'),
+        ('d', 'disable'),
+        ('s', 'suspend')
+    )
     reg_id = models.IntegerField(primary_key=True, auto_created=True)
     name = models.CharField(max_length=100, verbose_name='name', blank=False, null=False)
     secret_key = models.CharField(verbose_name='secret key', max_length=50)
     access_key = models.CharField(verbose_name='access key', max_length=50)
     server = models.CharField(verbose_name='server ip', max_length=20)
+    state = models.CharField(verbose_name='region state', max_length=1, default='e')
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -38,7 +44,7 @@ class Buckets(models.Model):
     permission = models.CharField(max_length=50, blank=False, default='private')
     # bucket_type = models.ForeignKey(BucketType, on_delete=models.SET_NULL, null=True, blank=True)
     bucket_region = models.ForeignKey(BucketRegion, on_delete=models.SET_NULL, null=True, blank=True)
-    state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False)
+    state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False, default='e')
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
