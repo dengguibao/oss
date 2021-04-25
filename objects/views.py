@@ -392,17 +392,21 @@ def put_object_endpoint(request):
         }
         if b.version_control:
             o = Objects.objects.create(**record_data)
+            new = True
         else:
-            o, _ = Objects.objects.update_or_create(**record_data)
+            o, new = Objects.objects.update_or_create(**record_data)
         o.permission = permission
         o.save()
 
     except Exception as e:
         raise ParseError(detail=str(e))
 
+    ser = ObjectsSerialize(o)
     return Response({
         'code': 0,
-        'msg': 'success'
+        'msg': 'success',
+        'data': ser.data,
+        'new': new,
     }, status=HTTP_201_CREATED)
 
 

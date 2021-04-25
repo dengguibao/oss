@@ -131,9 +131,9 @@ def set_bucket_region_endpoint(request):
 
         # post请求，用来创建对象
         if request.method == 'PUT':
-            region = model.objects.get(reg_id=data['reg_id'])
-            region.__dict__.update(**data)
-            region.save()
+            model.objects.select_for_update().filter(reg_id=data['reg_id']).update(**data)
+            # region.__dict__.update(**data)
+            # region.save()
 
         if request.method == 'DELETE':
             model.objects.get(reg_id=data['reg_id']).delete()
