@@ -135,11 +135,6 @@ REST_FRAMEWORK = {
     )
 }
 
-# RGW_API_KEY = {
-#     # access_key, secret_key, server
-#     'NORMAL': ('J2UTA0L5Y9LFGT2I6J9V', '7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek', '10.10.0.211:7480')
-# }
-
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',

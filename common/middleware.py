@@ -39,7 +39,12 @@ class RequestLogMiddleware(MiddlewareMixin):
     def __call__(self, request):
 
         try:
-            body = json.loads(request.body)
+            if request.content_type == 'multipart/form-data':
+                body = request.POST.dict()
+                file = request.FILES.get('file', None)
+                body['file'] = str(file)
+            else:
+                body = json.loads(request.body)
         except json.decoder.JSONDecodeError:
             body = dict()
 

@@ -254,7 +254,7 @@ def list_objects_endpoint(request):
     })
 
 
-@api_view(('PUT',))
+@api_view(('PUT', 'POST'))
 @verify_permission(model_name='objects')
 @permission_classes((AllowAny,))
 def put_object_endpoint(request):

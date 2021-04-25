@@ -154,3 +154,130 @@ TypeError: object of type 'map' has no len()
 2021-04-25 02:20:19,754 [INFO] body: null, url: /api/objects/download_file?=key=scrt-9.0.0-2430.osx_x64.dmg&bucket_name=testtest&=, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
 2021-04-25 02:21:12,415 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
 2021-04-25 02:21:15,414 [INFO] body: null, url: /api/objects/download_file?key=scrt-9.0.0-2430.osx_x64.dmg&bucket_name=testtest&=, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
+2021-04-25 02:30:25,251 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:30:25,294 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:30:36,954 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:30:36,982 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:00,601 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:00,627 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:01,974 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:02,001 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:06,951 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:06,979 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:08,291 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:08,319 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:23,910 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:23,938 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:31:24,473 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:31:24,501 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:32:01,483 [INFO] /Users/degguibao/PycharmProjects/oss/objects/views.py changed, reloading.
+2021-04-25 02:32:09,468 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:32:09,505 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:32:10,418 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:32:10,430 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:32:10,745 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:32:10,773 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:32:19,661 [INFO] body: null, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:32:36,817 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:32:36,845 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:34:41,508 [INFO] /Users/degguibao/PycharmProjects/oss/objects/views.py changed, reloading.
+2021-04-25 02:34:45,114 [INFO] /Users/degguibao/PycharmProjects/oss/objects/views.py changed, reloading.
+2021-04-25 02:35:04,235 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:04,334 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:07,140 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:07,211 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:07,465 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:07,511 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:07,780 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:07,834 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:13,273 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:13,343 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:13,607 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:13,688 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:14,541 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:14,600 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:35:14,797 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:35:14,844 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:38:01,390 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:38:01,422 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:38:15,449 [INFO] /Users/degguibao/PycharmProjects/oss/oss/settings.py changed, reloading.
+2021-04-25 02:38:27,964 [ERROR] Internal Server Error: /api/objects/upload_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 42, in __call__
+    body = json.loads(request.body)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/__init__.py", line 343, in loads
+    s = s.decode(detect_encoding(s), 'surrogatepass')
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xda in position 394: invalid continuation byte
+2021-04-25 02:39:41,563 [INFO] /Users/degguibao/PycharmProjects/oss/oss/settings.py changed, reloading.
+2021-04-25 02:40:12,367 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:40:12,403 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:40:40,292 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:40:51,005 [INFO] url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:41:42,398 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:41:45,853 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:42:11,243 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:42:11,277 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:42:26,245 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:42:28,598 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:42:28,633 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:42:43,794 [ERROR] Request body exceeded settings.DATA_UPLOAD_MAX_MEMORY_SIZE.
+2021-04-25 02:42:43,823 [WARNING] Bad Request: /api/objects/upload_file
+2021-04-25 02:42:50,185 [INFO] body: null, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:50:17,020 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:50:23,308 [ERROR] Internal Server Error: /api/objects/upload_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 45, in __call__
+    body['file'] = request.FILES.get('file', None).filename
+AttributeError: 'InMemoryUploadedFile' object has no attribute 'filename'
+2021-04-25 02:50:47,676 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:50:48,648 [ERROR] Internal Server Error: /api/objects/upload_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 45, in __call__
+    body['file'] = request.FILES.get('file', None)
+TypeError: 'str' object does not support item assignment
+2021-04-25 02:51:05,452 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:51:08,800 [INFO] body: '<QueryDict: {'path': [''], 'bucket_name': ['testtest'], 'permission': ['']}>', url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:51:27,840 [INFO] body: '<QueryDict: {'path': [''], 'bucket_name': ['testtest'], 'permission': ['']}>', url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:51:52,911 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:51:54,813 [INFO] body: {'path': '', 'bucket_name': 'testtest', 'permission': ''}, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:52:08,152 [INFO] body: {'path': '', 'bucket_name': 'testtest', 'permission': ''}, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:52:41,572 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:52:47,157 [ERROR] Internal Server Error: /api/objects/upload_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 66, in __call__
+    'body': None if not body else json.dumps(body, ensure_ascii=False).replace('"', '\''),
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/lib/python3.8/json/encoder.py", line 179, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type InMemoryUploadedFile is not JSON serializable
+2021-04-25 02:53:49,642 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:53:51,331 [INFO] body: {'path': '', 'bucket_name': 'testtest', 'permission': '', 'file': '用户中心usercenter.html'}, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:55:04,578 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:55:07,141 [INFO] body: {'path': '', 'bucket_name': 'testtest', 'permission': '', 'file': '用户中心usercenter.html'}, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:55:33,726 [INFO] body: {'path': '', 'bucket_name': 'testtest', 'permission': '', 'file': 'WeChatMac.dmg'}, url: /api/objects/upload_file?access_key=J2UTA0L5Y9LFGT2I6J9V&secret_key=7fdCjSLgKNt1MkqpRO7fVZUnRQmhBlyd1RASSSek, user: testuser, source_ip: 127.0.0.1, response_status_code: 201, content-length: 26
+2021-04-25 02:55:59,139 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:56:22,993 [ERROR] Internal Server Error: /api/objects/download_file
+Traceback (most recent call last):
+  File "/Users/degguibao/PycharmProjects/oss/.venv/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 57, in __call__
+    body = self.filter_secure_data(body, ('password', 'pwd1', 'pwd2', 'old_pwd'))
+  File "/Users/degguibao/PycharmProjects/oss/common/middleware.py", line 80, in filter_secure_data
+    if f in body:
+TypeError: argument of type 'NoneType' is not iterable
+2021-04-25 02:56:41,444 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:56:45,931 [INFO] /Users/degguibao/PycharmProjects/oss/common/middleware.py changed, reloading.
+2021-04-25 02:56:47,586 [INFO] body: null, url: /api/objects/download_file?key=scrt-9.0.0-2430.osx_x64.dmg&bucket_name=testtest&=, user: AnonymousUser, source_ip: 127.0.0.1, response_status_code: 200, content-length: -1
