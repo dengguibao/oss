@@ -10,6 +10,7 @@ build:
     - dev-ubuntu
   script:
     # - pip3 install -r ./requirement.txt
+    - mkdir logs
     - python3 ./manage.py makemigrations
     - python3 ./manage.py migrate
 
