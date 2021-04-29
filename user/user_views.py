@@ -5,24 +5,26 @@ from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
+
 from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
-from requests.exceptions import ConnectionError
 from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
+
+from requests.exceptions import ConnectionError
+
 from buckets.models import BucketRegion, Buckets
 from common.tokenauth import verify_permission
 from common.verify import (
     verify_mail, verify_username,
     verify_phone, verify_length,
-    verify_max_length, verify_max_value,
-    verify_phone_verification_code, verify_img_verification_code
+    verify_max_length, verify_phone_verification_code,
+    verify_img_verification_code
 )
-from common.func import build_ceph_userinfo, rgw_client, get_client_ip, clean_post_data
+from common.func import rgw_client, get_client_ip, clean_post_data
 from .serializer import UserSerialize, UserDetailSerialize
-from .models import Profile, Money, Quota
+from .models import Profile
 from rgwadmin.exceptions import NoSuchUser
 
 import time
@@ -169,17 +171,7 @@ def user_login_endpoint(request):
 
     # 首次登陆将生成access_key, secret_key, ceph_uid
     if not user.profile.phone_verify:
-        uid, access_key, secret_key = build_ceph_userinfo(user.username)
-        p = u.profile
-        p.__dict__.update(
-            **{
-                'phone_verify': True,
-                'access_key': access_key,
-                'secret_key': secret_key,
-                'ceph_uid': uid
-            }
-        )
-        p.save()
+        user.keys.init()
 
     # 使用django login方法登陆，不然没有登陆记录，但是不需要任何session
     login(request, user=user)
@@ -286,11 +278,11 @@ def user_delete_endpoint(request):
         for i in region:
             rgw = rgw_client(i.reg_id)
             try:
-                rgw.get_user(uid=u.profile.ceph_uid, stats=True)
+                rgw.get_user(uid=u.keys.ceph_uid, stats=True)
             except NoSuchUser:
                 continue
             else:
-                rgw.remove_user(uid=u.profile.ceph_uid, purge_data=True)
+                rgw.remove_user(uid=u.keys.ceph_uid, purge_data=True)
     u.delete()
     return Response({
         'code': 1,
@@ -309,17 +301,24 @@ def list_user_info_endpoint(request):
     """
     username = request.GET.get('username', None)
     req_user = request.user
+
+    users = User.objects. \
+        select_related('profile'). \
+        select_related('capacity_quota'). \
+        select_related('bandwidth_quota'). \
+        select_related('keys')
+
     if req_user.is_superuser:
         if username:
-            users = User.objects.filter(
+            user_list = users.filter(
                 Q(username__contains=username) |
                 Q(profile__parent_uid=username)
             )
         else:
-            users = User.objects.select_related('profile').all()
+            user_list = users.all()
     else:
         username = req_user.username
-        users = User.objects.select_related('profile').select_related('quota').filter(
+        user_list = users.filter(
             Q(username=username) |
             Q(profile__parent_uid=username) |
             Q(profile__root_uid=username)
@@ -340,7 +339,7 @@ def list_user_info_endpoint(request):
     page.number = cur_page
     page.max_page_size = 20
 
-    ret = page.paginate_queryset(users.order_by('-id'), request)
+    ret = page.paginate_queryset(user_list.order_by('-id'), request)
     ser = UserSerialize(ret, many=True)
     # print(page.page_size, page.page_size)
     return Response({
@@ -367,37 +366,40 @@ def get_user_detail_endpoint(request):
 
     try:
         user_id = request.GET.get('user_id', None)
-        if not user_id: user_id = request.user.id
-        u = User.objects.select_related('profile').select_related('quota').select_related('money').get(id=user_id)
-        b = Buckets.objects.filter(user=user_id).values()
+        if not user_id or not request.user.is_superuser:
+            user_id = request.user.id
+
+        u = User.objects.\
+            select_related('profile').\
+            select_related('capacity_quota').\
+            select_related('bandwidth_quota').\
+            select_related('keys').get(id=user_id)
+        b = Buckets.objects.filter(user=user_id).values('name')
     except Profile.DoesNotExist:
         raise ParseError(detail='not found user profile')
-    except Money.DoesNotExist:
-        raise ParseError(detail='not found money object')
     except ValueError:
         raise ParseError(detail='user_id is not a number')
 
-    req_username = request.user.username
-
-    if not request.user.is_superuser and \
-            u.username != req_username and \
-            u.profile.parent_uid != req_username:
-        raise NotAuthenticated(detail='permission denied!')
+    # req_username = request.user.username
+    # if not request.user.is_superuser and \
+    #         u.username != req_username and \
+    #         u.profile.parent_uid != req_username:
+    #     raise NotAuthenticated(detail='permission denied!')
 
     ser = UserDetailSerialize(u)
     ser_data = ser.data
-    ser_data['bucket'] = b
+    ser_data['bucket'] = [i['name'] for i in b]
     # ser_data['objects'] = {
     #     'count': Objects.objects.filter(owner=request.user, type='f').count()
     # }
-    ser_data['ceph'] = []
+    ser_data['real_usage'] = []
     region = BucketRegion.objects.all()
 
     for i in region:
         rgw = rgw_client(i.reg_id)
         try:
-            x = rgw.get_user(uid=request.user.profile.ceph_uid, stats=True)
-            ser_data['ceph'].append({
+            x = rgw.get_user(uid=request.user.keys.ceph_uid, stats=True)
+            ser_data['real_usage'].append({
                 'region': i.name,
                 'quota': x['user_quota'],
                 'stats': x['stats']
@@ -412,32 +414,6 @@ def get_user_detail_endpoint(request):
         'code': 0,
         'msg': 'success',
         'data': ser_data
-    })
-
-
-@api_view(('POST',))
-@permission_classes((AllowAny,))
-def user_charge_endpoint(request):
-    """
-    用户充值
-    :param request:
-    :return:
-    """
-    req_user = request.user
-
-    fields = (
-        ('*order_id', str, (verify_length, 10)),
-        ('*money', float, (verify_max_value, 99999.0))
-    )
-    data = clean_post_data(request.body, fields)
-
-    m = req_user.money.get()
-    m.charge(data['money'])
-
-    return Response({
-        'code': 0,
-        'msg': 'success',
-        'amount': m.amount
     })
 
 
@@ -514,7 +490,7 @@ def query_user_usage(request):
     for i in reg:
         rgw = rgw_client(i.reg_id)
         try:
-            rgw.get_user(uid=req_user.profile.ceph_uid)
+            rgw.get_user(uid=req_user.keys.ceph_uid)
         except NoSuchUser:
             continue
         except ConnectionError:
@@ -554,7 +530,7 @@ def query_user_usage(request):
             return __data
 
         data = rgw.get_usage(
-            uid=u.profile.ceph_uid,
+            uid=u.keys.ceph_uid,
             start=start_time,
             end=end_time,
             show_summary=True,
@@ -570,36 +546,6 @@ def query_user_usage(request):
         'code': 0,
         'msg': 'success',
         'data': usage_data
-    })
-
-
-@api_view(('POST', 'PUT'))
-def set_capacity_endpoint(request):
-    """
-    设置或者修改用户存储容量，即用户配额
-    """
-    fields = [
-        # 最大购买40T流量
-        ('*capacity', int, (verify_max_value, 40960)),
-        # 最大购买时长1年
-        ('*duration', int, (verify_max_value, 365))
-    ]
-
-    data = clean_post_data(request.data, tuple(fields))
-
-    if request.method == 'POST':
-        q, created = Quota.objects.update_or_create(user=request.user)
-
-    if request.method == 'PUT':
-        q = Quota.objects.get(user=request.user)
-
-    if data['capacity'] < q.capacity:
-        raise ParseError('original capacity big than select capacity')
-
-    q.renewal(data['duration'], data['capacity'])
-    return Response({
-        'code': 0,
-        'msg': 'success'
     })
 
 

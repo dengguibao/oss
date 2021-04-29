@@ -1,6 +1,6 @@
 from django.contrib.auth.models import Group, User, Permission
 
-from rest_framework.exceptions import ParseError, NotAuthenticated, NotFound
+from rest_framework.exceptions import ParseError, NotFound
 from rest_framework.response import Response
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.views import APIView
@@ -11,25 +11,39 @@ from common.func import verify_super_user, clean_post_data
 
 all_perms = {
     "auth.view_user": "获取用户详情",
+    "auth.change_user": "修改密码",
     "auth.delete_user": "删除用户",
-    "user.add_quota": "购买存储容量",
-    "user.change_quota": "扩容及续费存储容量",
+
+    "user.add_capacityquota": "购买存储容量",
+    "user.change_capacityquota": "扩容及续费存储容量",
+
+    "user.change_keys": "更换key",
+
     "buckets.add_bucketregion": "新增存储区域",
     "buckets.change_bucketregion": "修改存储区域",
     "buckets.view_bucketregion": "查看存储区域",
     "buckets.delete_bucketregion": "删除存储区域",
+
     "buckets.view_buckets": "查看bucket",
     "buckets.add_buckets": "新增bucket",
+
     "buckets.delete_buckets": "删除bucket",
     "buckets.change_buckets": "修改bucket读写权限",
+
     "buckets.add_bucketacl": "添加bucket授权",
     "buckets.view_bucketacl": "删除bucket授权",
     "buckets.delete_bucketacl": "修改bucket授权",
-    "objects.change_objects": "修改文件对象的读写权限",
+
+    "objects.change_objects": "设置文件对象的读写权限",
     "objects.view_objects": "查看文件对象的读写权限",
+
     "objects.add_objectacl": "添加文件对象授权",
     "objects.delete_objectacl": "删除文件对象授权",
     "objects.view_objectacl": "列出文件对象授权",
+
+    "account.add_plan": "新增资费套餐",
+    "account.change_plan": "修改资费套餐",
+    "account.delete_plan": "删除资费套餐",
 }
 
 
@@ -42,7 +56,7 @@ def list_all_available_perms_endpoint(request):
     })
 
 
-class SetGroupEndpoint(APIView):
+class GroupEndpoint(APIView):
 
     def get(self, request):
         """
@@ -102,7 +116,7 @@ class SetGroupEndpoint(APIView):
         })
 
 
-class SetGroupPermissionEndpoint(APIView):
+class GroupPermissionEndpoint(APIView):
 
     def get(self, request):
         """
@@ -175,7 +189,7 @@ class SetGroupPermissionEndpoint(APIView):
         return Permission.objects.get(codename=perm_name.split('.')[1])
 
 
-class SetGroupMemberEndpoint(APIView):
+class GroupMemberEndpoint(APIView):
 
     def post(self, request):
         """

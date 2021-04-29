@@ -8,22 +8,33 @@ from rest_framework.response import Response
 
 from common.func import send_phone_verify_code
 from common.captcha import Captcha
+from user.models import Profile
 
 
 @api_view(('GET',))
 @permission_classes((AllowAny,))
 def send_phone_verify_code_endpoint(request):
     if request.method == 'GET':
+        username = request.GET.get('username', None)
         try:
-            username = request.GET.get('username', None)
             user = User.objects.select_related('profile').get(username=username)
+            phone = user.profile.phone
         except User.DoesNotExist:
-            raise NotFound('not found this user')
+            user = None
 
-        if not cache.get('phone_verify_code_%s' % user.profile.phone):
-            status_code, verify_code = send_phone_verify_code(user.profile.phone)
+        try:
+            profile = Profile.objects.get(phone=username)
+            phone = profile.phone
+        except Profile.DoesNotExist:
+            profile = None
+
+        if not user and not profile:
+            raise ParseError('not found this user')
+
+        if not cache.get('phone_verify_code_%s' % phone):
+            status_code, verify_code = send_phone_verify_code(phone)
             if status_code == 200:
-                cache.set('phone_verify_code_%s' % user.profile.phone, verify_code, 120)
+                cache.set('phone_verify_code_%s' % phone, verify_code, 120)
         else:
             raise ParseError(detail='verification code already send')
 

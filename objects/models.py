@@ -3,7 +3,6 @@ from django.contrib.auth.models import User
 from buckets.models import Buckets
 
 
-# Create your models here.
 class Objects(models.Model):
     FILE_TYPE = (
         ('f', 'file'),
@@ -24,7 +23,7 @@ class Objects(models.Model):
     upload_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.obj_id}, {self.name}, {self.key}'
+        return f'obj_id:{self.obj_id}, name:{self.name}, key:{self.key}'
 
     class Meta:
         unique_together = (
@@ -40,3 +39,12 @@ class ObjectAcl(models.Model):
 
     def __str__(self):
         return f'{self.object.name}, {self.permission}'
+
+    @property
+    def json(self):
+        return {
+            'acl_oid': self.acl_oid,
+            'permission': self.permission,
+            'user_id': self.user,
+            'object_id': self.object
+        }

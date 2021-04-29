@@ -7,18 +7,28 @@ class BucketRegion(models.Model):
     STATE = (
         ('e', 'enable'),
         ('d', 'disable'),
-        ('s', 'suspend')
     )
     reg_id = models.IntegerField(primary_key=True, auto_created=True)
     name = models.CharField(max_length=100, verbose_name='name', blank=False, null=False)
     secret_key = models.CharField(verbose_name='secret key', max_length=50)
     access_key = models.CharField(verbose_name='access key', max_length=50)
     server = models.CharField(verbose_name='server ip', max_length=20)
-    state = models.CharField(verbose_name='region state', max_length=1, default='e')
+    state = models.CharField(verbose_name='region state', max_length=1, default='e', choices=STATE)
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name, self.server
+
+    @property
+    def json(self):
+        return {
+            "reg_id": self.reg_id,
+            'name': self.name,
+            'secret_key': self.secret_key,
+            'access_key': self.access_key,
+            'server': self.access_key,
+            'state': 'enable' if self.state == 'e' else 'disabled'
+        }
 
 
 class BucketType(models.Model):
@@ -48,7 +58,7 @@ class Buckets(models.Model):
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.bucket_id}, {self.name}'
+        return f'bucket_id:{self.bucket_id}, name:{self.name}'
 
     # def calculate_cost(self, capacity):
     #     return self.bucket_type.price*capacity
@@ -60,7 +70,7 @@ class Buckets(models.Model):
         self.save()
 
     def check_bucket_expire(self):
-       return True if self.start_time+self.duration*86400 > time.time() else False
+        return True if self.start_time+self.duration*86400 > time.time() else False
 
 
 class BucketAcl(models.Model):
@@ -71,7 +81,17 @@ class BucketAcl(models.Model):
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f'{self.bucket.name}, {self.permission}'
+        return f'bucket:{self.bucket.name}, permission:{self.permission}'
+
+    @property
+    def json(self):
+        return {
+            'acl_bid': self.acl_bid,
+            'permission': self.permission,
+            'bucket_id': self.bucket_id,
+            'user': self.user_id,
+            'create_time': self.create_time
+        }
 
 
 class Offset(models.Model):
@@ -84,7 +104,7 @@ class Offset(models.Model):
     create_time = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return '%s' % self.code
+        return 'code:%s' % self.code
 
     def get_offset_value(self):
         if self.used_times < self.max_use_times or \

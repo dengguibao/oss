@@ -161,6 +161,14 @@ def verify_max_value(i, max_value) -> bool:
     return True if 0 < i < max_value else False
 
 
+def verify_number_range(value: int, num_range: tuple):
+    """
+    验证数字是否在某个范围内
+    """
+    x, y = num_range
+    return True if x < value < y else False
+
+
 def verify_pk(i: int, model: object) -> bool:
     """
     验证某个对象的的主键是否为真实有效

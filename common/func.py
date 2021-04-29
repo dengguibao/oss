@@ -79,26 +79,39 @@ def s3_client(reg_id: int, username: str):
     如果用户存在则使用用户的key创建s3客户端
     如果不存在则创建该用户，使用指定的key，然后再初始化s3客户端
     """
-    u = User.objects.select_related('profile').select_related('quota').get(username=username)
+    u = User.objects.select_related('profile').\
+        select_related('capacity_quota').\
+        select_related('keys').get(username=username)
     if not u.profile.phone_verify:
         return
     region = BucketRegion.objects.get(reg_id=reg_id)
     rgw = rgw_client(reg_id)
     try:
-        rgw.get_user(uid=u.profile.ceph_uid)
+        rgw.get_user(uid=u.keys.ceph_uid)
     except NoSuchUser:
         rgw.create_user(
-            uid=u.profile.ceph_uid,
-            access_key=u.profile.access_key,
-            secret_key=u.profile.secret_key,
+            uid=u.keys.ceph_uid,
+            access_key=u.keys.ceph_access_key,
+            secret_key=u.keys.ceph_secret_key,
             display_name=u.first_name,
             max_buckets=200,
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
-    rgw.set_user_quota(uid=u.profile.ceph_uid, max_size_kb=u.quota.capacity*1024**2, enabled=True, quota_type='user')
+    except requests.exceptions.ConnectionError:
+        raise ParseError('connection to server %s timeout' % region.server)
+
+    if u.capacity_quota.sync == 1:
+        rgw.set_user_quota(
+            uid=u.keys.ceph_uid,
+            max_size_kb=u.capacity_quota.capacity*1024**2,
+            enabled=True,
+            quota_type='user'
+        )
+        u.capacity_quota.ceph_sync()
+
     conn = Session(
-        aws_access_key_id=u.profile.access_key,
-        aws_secret_access_key=u.profile.secret_key
+        aws_access_key_id=u.keys.ceph_access_key,
+        aws_secret_access_key=u.keys.ceph_secret_key
     )
     client = conn.client(
         service_name='s3',
@@ -108,7 +121,7 @@ def s3_client(reg_id: int, username: str):
     return client
 
 
-def build_ceph_userinfo(username: str) -> tuple:
+def build_ceph_userinfo() -> tuple:
     """
     根据用户名构建ceph_uid, access_key, secret_key
     """
@@ -124,17 +137,6 @@ def random_build_str(length: int) -> str:
     随机构建生成指定长度的字符串，包含a-zA-Z0-9
     """
     return ''.join(random.sample('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', length))
-    # if len(origin_str) < 32:
-    #     return str(uuid.uuid1()).replace('-', '')[:uid_len]
-    # data = []
-    # for i in range(uid_len):
-    #     x = random.randint(0, 31)
-    #     if x < 15:
-    #         data.append(origin_str[x].upper())
-    #     else:
-    #         data.append(origin_str[x])
-    #
-    # return ''.join(data)
 
 
 def get_client_ip(request):

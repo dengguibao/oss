@@ -1,5 +1,6 @@
+from django.contrib.auth.models import User
 from rest_framework.authentication import BaseAuthentication
-from user.models import Profile
+from user.models import Keys
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions, HTTP_HEADER_ENCODING
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
@@ -22,6 +23,8 @@ class TokenAuthentication(BaseAuthentication):
         if not cache.get(client_ip):
             cache.set(client_ip, 1, 1)
         request_times = cache.get(client_ip)
+        if not request_times:
+            request_times = 0
         cache.set(client_ip, request_times+1, 1)
 
         # 当1秒内请求次数超过20次，将ip列入黑名单，加入黑名单次数达到2次后，禁止该ip访问
@@ -41,11 +44,12 @@ class TokenAuthentication(BaseAuthentication):
             sk = request.GET.get('secret_key', None)
             if ak and sk:
                 try:
-                    p = Profile.objects.get(access_key=ak, secret_key=sk)
-                except Profile.DoesNotExist:
+                    p = Keys.objects.get(user_access_key=ak, user_secret_key=sk)
+                except Keys.DoesNotExist:
                     p = None
 
                 if p and p.user.is_active:
+                    self.verify_user_storage_is_expire(request, p.user)
                     return p.user, None
 
         auth = request.META.get('HTTP_AUTHORIZATION', b'')
@@ -75,8 +79,7 @@ class TokenAuthentication(BaseAuthentication):
 
         return self.verify_token_value(token, request)
 
-    @staticmethod
-    def verify_token_value(key, request):
+    def verify_token_value(self, key, request):
         ua = request.META.get('HTTP_USER_AGENT', 'unknown')
         client_ip = get_client_ip(request)
 
@@ -94,8 +97,14 @@ class TokenAuthentication(BaseAuthentication):
         if time.time() - cache_latest_time > settings.TOKEN_EXPIRE_TIME:
             raise exceptions.AuthenticationFailed(_('Invalid token. Token expire.'))
 
+        self.verify_user_storage_is_expire(request, cache_user)
         cache.set('token_%s' % key, (cache_ua, cache_ip, time.time(), cache_user))
         return cache_user, None
+
+    def verify_user_storage_is_expire(self, request, user: User):
+        if (request.path.startswith('/api/buckets') or request.path.startswith('/api/objects')) and \
+                not user.capacity_quota.valid():
+            raise exceptions.NotAcceptable('storage is expired!')
 
 
 def verify_permission(model_name: str, app_label: str = None):

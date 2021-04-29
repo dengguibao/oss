@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'common',
     'rest_framework.authtoken',
     'corsheaders',
-    'buckets'
+    'buckets',
+    'account',
 ]
 
 MIDDLEWARE = [
@@ -176,6 +177,7 @@ CORS_ALLOW_HEADERS = (
     'x-requested-with'
 )
 
+USER_MIN_BANDWIDTH = 4
 
 def get_logger():
     logger = logging.getLogger(__name__)

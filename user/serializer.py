@@ -1,16 +1,49 @@
-from rest_framework.serializers import ModelSerializer
+import time
+
+from rest_framework.serializers import ModelSerializer, SerializerMethodField
 from django.contrib.auth.models import User
-from .models import Profile, Quota, Money
+from .models import Profile, CapacityQuota, BandwidthQuota, Keys
 
 
 class ProfileSerialize(ModelSerializer):
-    # profile = HyperlinkedRelatedField(read_only=True)
 
     class Meta:
         model = Profile
+        fields = '__all__'
+
+
+class KeysSerialize(ModelSerializer):
+
+    class Meta:
+        model = Keys
         fields = (
-            'phone', 'phone_verify', 'is_subuser', 'ceph_uid', 'access_key', 'secret_key'
+            'ceph_uid', 'user_access_key', 'user_secret_key'
         )
+
+
+class BandwidthSerialize(ModelSerializer):
+    deadline = SerializerMethodField()
+
+    def get_deadline(self, obj):
+        ts = time.localtime(obj.start_time+(obj.duration*86400))
+        return time.strftime('%F %T', ts)
+
+    class Meta:
+        model = BandwidthQuota
+        fields = '__all__'
+
+
+class CapacityQuotaSerialize(ModelSerializer):
+
+    deadline = SerializerMethodField()
+
+    def get_deadline(self, obj):
+        ts = time.localtime(obj.start_time + (obj.duration * 86400))
+        return time.strftime('%F %T', ts)
+
+    class Meta:
+        model = CapacityQuota
+        fields = '__all__'
 
 
 class SimpleUserSerialize(ModelSerializer):
@@ -21,36 +54,28 @@ class SimpleUserSerialize(ModelSerializer):
         )
 
 
-class QuotaSerialize(ModelSerializer):
-    class Meta:
-        model = Quota
-        fields = '__all__'
-
-
-class MoneySerialize(ModelSerializer):
-    class Meta:
-        model = Money
-        fields = '__all__'
-
-
 class UserSerialize(ModelSerializer):
     profile = ProfileSerialize(read_only=True)
-    quota = QuotaSerialize(read_only=True)
+    capacity_quota = CapacityQuotaSerialize(read_only=True)
+    keys = KeysSerialize()
+    bandwidth_quota = BandwidthSerialize()
 
     class Meta:
         model = User
         fields = (
             'id', 'is_superuser', 'username',
             'is_active', 'first_name', 'last_login',
-            'date_joined', 'email', 'profile', 'quota'
+            'date_joined', 'email', 'profile', 'capacity_quota',
+            'keys', 'bandwidth_quota'
 
         )
 
 
 class UserDetailSerialize(ModelSerializer):
-    profile = ProfileSerialize(read_only=True, allow_null=True)
-    money = MoneySerialize(read_only=True, allow_null=True)
-    quota = QuotaSerialize(read_only=True, allow_null=True)
+    profile = ProfileSerialize(read_only=True)
+    capacity_quota = CapacityQuotaSerialize(read_only=True)
+    keys = KeysSerialize()
+    bandwidth_quota = BandwidthSerialize()
 
     class Meta:
         model = User

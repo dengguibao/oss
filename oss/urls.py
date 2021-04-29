@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/', include('user.urls')),
     path('api/', include('buckets.urls')),
     path('api/', include('objects.urls')),
+    path('api/', include('account.urls')),
     # path('api/', include('public.urls'))
     path('api/user/send_verify_code', send_phone_verify_code_endpoint),
     path('api/captcha', build_image_verify_code_endpoint)

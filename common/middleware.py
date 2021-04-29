@@ -40,6 +40,7 @@ class RequestLogMiddleware(MiddlewareMixin):
         msg = {
             'body': None if not body else json.dumps(body, ensure_ascii=False).replace('"', '\''),
             'url': url,
+            'method': request.method,
             'user': request.user.username if not isinstance(request.user, AnonymousUser) else 'AnonymousUser',
             'source_ip': get_client_ip(request),
             # 'destination_ip': socket.gethostbyname(socket.gethostname()),
