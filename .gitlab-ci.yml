@@ -19,6 +19,7 @@ test:
   script:
     - ls -l
     - pwd
+    - mkdir logs
     - python3 ./manage.py test
     - rm db.sqlite3
   tags:
@@ -29,6 +30,7 @@ deploy:
   tags:
     - dev-ubuntu
   script:
+     - mkdir logs
      - rm -f db.sqlite3
      - cp -rf * /home/oss/
      - python3 ./manage.py makemigrations
