@@ -292,7 +292,7 @@ def user_delete_endpoint(request):
                 rgw.remove_user(uid=u.keys.ceph_uid, purge_data=True)
     u.delete()
     return Response({
-        'code': 1,
+        'code': 0,
         'msg': 'success'
     })
 
