@@ -17,7 +17,8 @@ from .user_group import (
     GroupEndpoint,
     GroupMemberEndpoint,
     GroupPermissionEndpoint,
-    list_all_available_perms_endpoint
+    list_all_available_perms_endpoint,
+    set_default_user_role,
 )
 app_name = 'user'
 
@@ -41,6 +42,8 @@ urlpatterns = [
     path('user/group/role', GroupEndpoint.as_view()),
     path('user/group/perm', GroupPermissionEndpoint.as_view()),
     path('user/group/role/member', GroupMemberEndpoint.as_view()),
+
+    path('user/role/default', set_default_user_role),
 
     path('user/keys', KeysEndpoint.as_view())
 ]

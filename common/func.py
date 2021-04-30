@@ -179,7 +179,7 @@ def clean_post_data(body_data, fields):
     清理过滤用户post的json数据
     """
     data = verify_field(body_data, tuple(fields))
-    if not isinstance(data, dict):
+    if data and not isinstance(data, dict):
         raise ParseError(data)
     else:
         return data

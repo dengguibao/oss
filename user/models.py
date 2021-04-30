@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
@@ -49,6 +49,7 @@ class Keys(models.Model):
     key_type = models.CharField(max_length=5, blank=True, default='s3')
     user_secret_key = models.CharField(max_length=50, blank=True, null=True, unique=True,)
     user_access_key = models.CharField(max_length=50, blank=True, null=True, unique=True,)
+    allow_ip = models.CharField(max_length=15, blank=False, default='*')
 
     def __str__(self):
         return f'username: {self.user.username}, user_access_key: {self.user_access_key}, user_secret_key: {self.user_secret_key}'
@@ -65,6 +66,13 @@ class Keys(models.Model):
     def change_user_key(self):
         self.user_access_key = random_build_str(32)
         self.user_secret_key = random_build_str(40)
+        self.save()
+
+    def set_allow_access(self, ip: str):
+        if ip == '0.0.0.0':
+            self.allow_ip = '*'
+        else:
+            self.allow_ip = ip
         self.save()
 
 
@@ -152,6 +160,22 @@ class BandwidthQuota(models.Model):
             'duration': self.duration,
             'capacity': self.bandwidth,
         }
+
+
+class DefaultGroup(models.Model):
+    group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name='default_group')
+    default = models.BooleanField(verbose_name="whether user default role", default=False)
+
+    def set_default(self):
+        DefaultGroup.objects.all().update(default=False)
+        self.default = True
+        self.save()
+
+
+@receiver(post_save, sender=Group)
+def handle_default_role(sender, instance, created, **kwargs):
+    if created:
+        DefaultGroup.objects.create(group=instance)
 
 
 @receiver(post_save, sender=User)

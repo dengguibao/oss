@@ -17,6 +17,8 @@ class OrderEndpoint(APIView):
         order_no = request.GET.get('order_no', None)
         if order_no:
             data = obj.filter(no=order_no)
+            if data and request.user.is_superuser is not None:
+                data = data.filter(user=request.user)
         else:
             data = obj.all() if request.user.is_superuser else obj.filter(user=request.user)
 
@@ -39,5 +41,10 @@ class OrderEndpoint(APIView):
         return Response({
             'code': 0,
             'msg': 'success',
-            'data': ser.data
+            'data': ser.data,
+            'page_info': {
+                'record_count': len(ser.data),
+                'page_size': size,
+                'current_page': page.page.number
+            }
         })

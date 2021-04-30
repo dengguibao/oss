@@ -230,6 +230,28 @@ def verify_img_verification_code(value: str) -> bool:
     return True
 
 
+def verify_ip_addr(ip: str) -> bool:
+    """
+    verify ip whether is a invalid ip
+    :param ip:
+    :return:
+    """
+    if len(ip) > 15 or '.' not in ip or len(ip.split('.')) > 4:
+        return False
+    first = True
+    for i in ip.split('.'):
+        try:
+            n = int(i)
+        except ValueError:
+            return False
+        if n > 255:
+            return False
+        if first and n == 0 and ip != '0.0.0.0':
+            return False
+        first = False
+    return True
+
+
 # def verify_body(func):
 #     def wrap(request, *args, **kwargs):
 #         if request.method in ('DELETE', 'POST', 'PUT'):

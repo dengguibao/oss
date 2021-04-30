@@ -1,12 +1,12 @@
 from django.contrib.auth.models import Group, User, Permission
 
-from rest_framework.exceptions import ParseError, NotFound
+from rest_framework.exceptions import ParseError, NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 
-from common.verify import verify_max_length, verify_in_array
+from common.verify import verify_max_length, verify_in_array, verify_pk
 from common.func import verify_super_user, clean_post_data
 
 all_perms = {
@@ -56,6 +56,23 @@ def list_all_available_perms_endpoint(request):
     })
 
 
+@api_view(('PUT',))
+def set_default_user_role(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied()
+
+    fields = (
+        ('*group_id', int, (verify_pk, Group)),
+    )
+    data = clean_post_data(request.body, fields)
+    group = Group.objects.get(pk=data['group_id'])
+    group.default_group.set_default()
+    return Response({
+        'code': 0,
+        'msg': 'success'
+    })
+
+
 class GroupEndpoint(APIView):
 
     def get(self, request):
@@ -69,6 +86,7 @@ class GroupEndpoint(APIView):
             data.append({
                 'id': i.id,
                 'name': i.name,
+                'default': i.default_group.default,
                 'permissions': i.permissions.all().values('codename', 'name'),
                 'users': i.user_set.all().values('username', 'first_name')
             })

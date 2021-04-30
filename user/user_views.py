@@ -24,7 +24,7 @@ from common.verify import (
 )
 from common.func import rgw_client, get_client_ip, clean_post_data
 from .serializer import UserSerialize, UserDetailSerialize
-from .models import Profile
+from .models import Profile, DefaultGroup
 from rgwadmin.exceptions import NoSuchUser
 
 import time
@@ -105,9 +105,16 @@ def create_user_endpoint(request):
             p.level = request.user.profile.level + 1
             p.save()
         p.save()
-
     except Exception as e:
         raise ParseError(detail=str(e))
+
+    # 新注册用户加入默认用户角色
+    try:
+        dg = DefaultGroup.objects.get(default=True)
+    except DefaultGroup.DoesNotExist:
+        pass
+    else:
+        dg.group.user_set.add(user)
 
     return Response({
         'code': 0,

@@ -44,13 +44,16 @@ class TokenAuthentication(BaseAuthentication):
             sk = request.GET.get('secret_key', None)
             if ak and sk:
                 try:
-                    p = Keys.objects.get(user_access_key=ak, user_secret_key=sk)
+                    k = Keys.objects.get(user_access_key=ak, user_secret_key=sk)
                 except Keys.DoesNotExist:
-                    p = None
+                    k = None
 
-                if p and p.user.is_active:
-                    self.verify_user_storage_is_expire(request, p.user)
-                    return p.user, None
+                if k and k.user.is_active:
+                    if client_ip == k.allow_ip or k.allow_ip == '*':
+                        self.verify_user_storage_is_expire(request, k.user)
+                        return k.user, None
+                    else:
+                        raise exceptions.NotAcceptable('your ip not in allow ip list')
 
         auth = request.META.get('HTTP_AUTHORIZATION', b'')
         if isinstance(auth, str):
