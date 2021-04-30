@@ -124,6 +124,7 @@ def create_user_endpoint(request):
 
 @api_view(('POST',))
 @permission_classes((AllowAny,))
+@verify_permission(model_name='user')
 def user_login_endpoint(request):
     """
     使用用户名和密码登陆
@@ -201,7 +202,8 @@ def user_login_endpoint(request):
     })
 
 
-@api_view(('POST',))
+@api_view(('PUT',))
+@verify_permission(model_name='user')
 def change_password_endpoint(request):
     """
     修改用户名密码，如果是超级管理员则不需要提供原密码，直接更改某个用户的密码
@@ -253,6 +255,7 @@ def change_password_endpoint(request):
 
 
 @api_view(('DELETE',))
+@verify_permission(model_name='user')
 def user_delete_endpoint(request):
     """
     删除指定的用户，该超作只允许超级管理员执行
@@ -298,7 +301,7 @@ def user_delete_endpoint(request):
 
 
 @api_view(('GET',))
-# @verify_permission(model_name='user')
+@verify_permission(model_name='user')
 def list_user_info_endpoint(request):
     """
     列出所有用户，当前操作对象为超级管理员时，可指定某个用户名，不批定则列出所有用户
@@ -362,6 +365,7 @@ def list_user_info_endpoint(request):
 
 
 @api_view(('GET',))
+@verify_permission(model_name='user')
 def get_user_detail_endpoint(request):
     """
     列出某个用户的所有详细信息
@@ -463,6 +467,7 @@ def query_user_exist_endpoint(request):
 
 
 @api_view(("GET",))
+@verify_permission(model_name='user')
 def query_user_usage(request):
     """
     查询用户流量及使情情况
@@ -474,7 +479,7 @@ def query_user_usage(request):
 
     fmt = '%F'
 
-    u = False
+    u = User.objects.none()
     try:
         u = User.objects.get(username=username)
     except User.DoesNotExist:

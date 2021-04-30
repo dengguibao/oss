@@ -1,12 +1,15 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
+
+from common.tokenauth import verify_permission
 from .models import Buckets
 from common.verify import verify_pk, verify_in_array
 from common.func import s3_client, clean_post_data
 
 
 @api_view(('PUT',))
+@verify_permission(model_name='buckets')
 def set_bucket_perm_endpoint(request):
     """
     查询bucket的读写权限
@@ -43,6 +46,7 @@ def set_bucket_perm_endpoint(request):
 
 
 @api_view(('GET',))
+@verify_permission(model_name='buckets')
 def query_bucket_perm_endpoint(request):
     """
     查询指定的bucket的读写权限

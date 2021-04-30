@@ -14,6 +14,7 @@ from rgwadmin.exceptions import NoSuchKey, NoSuchBucket
 from buckets.models import BucketRegion, BucketAcl, Buckets
 from buckets.serializer import BucketSerialize
 from common.func import clean_post_data, s3_client, rgw_client
+from common.tokenauth import verify_permission
 from common.verify import verify_pk, verify_in_array, verify_true_false, verify_bucket_name
 
 
@@ -156,6 +157,7 @@ class BucketEndpoint(APIView):
 
 
 @api_view(('GET',))
+@verify_permission(model_name='objects')
 def query_bucket_name_exist_endpoint(request):
     """
     查询bucket是否已经存在

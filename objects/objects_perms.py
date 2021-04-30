@@ -2,6 +2,7 @@ from rest_framework.exceptions import ParseError, NotAuthenticated, NotFound
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 
+from common.tokenauth import verify_permission
 from common.verify import verify_pk, verify_in_array
 from common.func import s3_client, clean_post_data
 from .models import Objects, ObjectAcl
@@ -38,6 +39,7 @@ def verify_file_owner_and_permission(o: Objects, request, perm: str):
 
 
 @api_view(('PUT',))
+@verify_permission(model_name='objects')
 def set_object_perm_endpoint(request):
     """
     设置文件对象的读写权限
@@ -79,6 +81,7 @@ def set_object_perm_endpoint(request):
 
 
 @api_view(('GET',))
+@verify_permission(model_name='objects')
 def query_object_perm_endpoint(request):
     """
     查询文件对象的读写权限

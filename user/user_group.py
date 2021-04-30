@@ -10,34 +10,36 @@ from common.verify import verify_max_length, verify_in_array, verify_pk
 from common.func import verify_super_user, clean_post_data
 
 all_perms = {
-    "auth.view_user": "获取用户详情",
+    "auth.view_user": "查看用户详情及用量",
     "auth.change_user": "修改密码",
     "auth.delete_user": "删除用户",
+    "auth.add_user": "用户登陆",
 
     "user.add_capacityquota": "购买存储容量",
-    "user.change_capacityquota": "扩容及续费存储容量",
+    "user.change_capacityquota": "续费存储容量",
 
-    "user.change_keys": "更换key",
+    "user.change_keys": "更换key与设置使用白名单",
 
     "buckets.add_bucketregion": "新增存储区域",
     "buckets.change_bucketregion": "修改存储区域",
     "buckets.view_bucketregion": "查看存储区域",
     "buckets.delete_bucketregion": "删除存储区域",
 
-    "buckets.view_buckets": "查看bucket",
+    "buckets.view_buckets": "查询与列出bucket",
     "buckets.add_buckets": "新增bucket",
-
     "buckets.delete_buckets": "删除bucket",
     "buckets.change_buckets": "修改bucket读写权限",
 
     "buckets.add_bucketacl": "添加bucket授权",
-    "buckets.view_bucketacl": "删除bucket授权",
-    "buckets.delete_bucketacl": "修改bucket授权",
+    "buckets.view_bucketacl": "查看bucket授权",
+    "buckets.delete_bucketacl": "删除bucket授权",
 
-    "objects.change_objects": "设置文件对象的读写权限",
-    "objects.view_objects": "查看文件对象的读写权限",
+    "objects.change_objects": "设置文件对象的访问权限",
+    # "objects.delete_objects": "删除文件",
+    "objects.view_objects": "列出文件对象的访问权限",
+    # "objects.add_objects": "新建文件夹",
 
-    "objects.add_objectacl": "添加文件对象授权",
+    "objects.add_objectacl": "设置文件对象授权",
     "objects.delete_objectacl": "删除文件对象授权",
     "objects.view_objectacl": "列出文件对象授权",
 
@@ -45,6 +47,26 @@ all_perms = {
     "account.change_plan": "修改资费套餐",
     "account.delete_plan": "删除资费套餐",
 }
+
+
+def build_cn_permission_list(user_perms, _type: str = 'long'):
+    data = []
+    for i in user_perms:
+        if _type == 'short':
+            for k, v in all_perms.items():
+                if i in k:
+                    data.append({
+                        'codename': k,
+                        'cn_name': v
+                    })
+
+        if _type == 'long':
+            if i in all_perms:
+                data.append({
+                    'codename': i,
+                    'cn_name': all_perms[i]
+                })
+    return data
 
 
 @api_view(('GET',))
@@ -87,7 +109,9 @@ class GroupEndpoint(APIView):
                 'id': i.id,
                 'name': i.name,
                 'default': i.default_group.default,
-                'permissions': i.permissions.all().values('codename', 'name'),
+                'permissions': build_cn_permission_list(
+                    [p.codename for p in i.permissions.all()], 'short'
+                ),
                 'users': i.user_set.all().values('username', 'first_name')
             })
         return Response({
@@ -157,7 +181,7 @@ class GroupPermissionEndpoint(APIView):
         return Response({
             'code': 0,
             'msg': 'success',
-            'data': perm_list
+            'data': build_cn_permission_list(perm_list)
         })
 
     def post(self, request):

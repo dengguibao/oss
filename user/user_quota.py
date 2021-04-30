@@ -115,6 +115,7 @@ class CapacityQuotaEndpoint(APIView):
 
         offset = plan.offset if duration >= plan.offset_min_days else 1.0
 
+        price = 1.0
         if type == 'storage':
             price = plan.s_price
 
