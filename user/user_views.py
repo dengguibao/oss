@@ -124,7 +124,6 @@ def create_user_endpoint(request):
 
 @api_view(('POST',))
 @permission_classes((AllowAny,))
-@verify_permission(model_name='user')
 def user_login_endpoint(request):
     """
     使用用户名和密码登陆

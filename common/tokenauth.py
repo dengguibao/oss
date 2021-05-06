@@ -20,8 +20,6 @@ class TokenAuthentication(BaseAuthentication):
             raise exceptions.APIException('your ip address is blocked, will be auto resume after 2 hours')
 
         # 记录1秒内某个ip的请求频率
-        if not cache.get(client_ip):
-            cache.set(client_ip, 1, 1)
         request_times = cache.get(client_ip)
         if not request_times:
             request_times = 0

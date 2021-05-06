@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
+from rest_framework.permissions import DjangoModelPermissions
 
 from common.verify import verify_max_length, verify_in_array, verify_pk
 from common.func import verify_super_user, clean_post_data
@@ -14,6 +15,10 @@ all_perms = {
     "auth.change_user": "修改密码",
     "auth.delete_user": "删除用户",
     "auth.add_user": "用户登陆",
+
+    "auth.add_group": "新建角色",
+    "auth.delete_group": "删除角色",
+    "auth.view_group": "查看角色以及对应的用户与权限",
 
     "user.add_capacityquota": "购买存储容量",
     "user.change_capacityquota": "续费存储容量",
@@ -97,14 +102,18 @@ def set_default_user_role(request):
 
 class GroupEndpoint(APIView):
 
+    queryset = Group.objects.none()
+
     def get(self, request):
         """
         查询所有可用的角色（组）
         """
-        verify_super_user(request)
-        ret = Group.objects.prefetch_related('permissions').prefetch_related('user_set__groups').all()
+        if not request.user.has_perm('auth.view_group'):
+            raise PermissionDenied()
+
+        self.queryset = Group.objects.prefetch_related('permissions').prefetch_related('user_set__groups').all()
         data = []
-        for i in ret:
+        for i in self.queryset:
             data.append({
                 'id': i.id,
                 'name': i.name,
@@ -124,34 +133,31 @@ class GroupEndpoint(APIView):
         """
         新增一个角色
         """
-        verify_super_user(request)
         fields = [
             ('*name', str, (verify_max_length, 20))
         ]
         data = clean_post_data(request.body, fields)
-        Group.objects.update_or_create(
+        self.queryset, _ = Group.objects.update_or_create(
             name=data['name']
         )
 
         return Response({
             'code': 0,
             'msg': 'success',
-            # 'data': model_to_dict(g)
         }, status=HTTP_201_CREATED)
 
     def delete(self, request):
         """
         删除一个角色
         """
-        verify_super_user(request)
-        id = request.GET.get('id', None)
+        group_id = request.GET.get('id', None)
         try:
-            g = Group.objects.get(id=int(id))
+            self.queryset = Group.objects.get(pk=int(group_id))
         except TypeError:
             raise ParseError('id is not a number')
         except Group.DoesNotExist:
             raise NotFound('not found this group')
-        g.delete()
+        self.queryset.delete()
         return Response({
             'code': 0,
             'msg': 'success'
@@ -159,6 +165,8 @@ class GroupEndpoint(APIView):
 
 
 class GroupPermissionEndpoint(APIView):
+    queryset = Group.objects.none()
+    permission_classes = (DjangoModelPermissions,)
 
     def get(self, request):
         """
@@ -169,8 +177,8 @@ class GroupPermissionEndpoint(APIView):
         try:
             perm_list = []
             if username:
-                u = User.objects.get(username=username)
-                perm_list = u.get_all_permissions()
+                self.queryset = User.objects.get(username=username)
+                perm_list = self.queryset.get_all_permissions()
 
         except User.DoesNotExist:
             raise NotFound('not fount this user')
@@ -188,14 +196,8 @@ class GroupPermissionEndpoint(APIView):
         """
         将权限授权给某个角色（组）
         """
-        data = self.check_post_data(request)
-        perm = data['perm']
-        try:
-            g = Group.objects.get(name=data['role'])
-        except Group.DoesNotExist:
-            raise NotFound('not found this group')
-        perm_obj = self.get_perm_obj(perm)
-        g.permissions.add(perm_obj)
+        group, perm = self.get_group_and_permission(request)
+        group.permissions.add(perm)
         return Response({
             'code': 0,
             'msg': 'success'
@@ -205,48 +207,45 @@ class GroupPermissionEndpoint(APIView):
         """
         将权限从某个角色（组）中移除
         """
-        data = self.check_post_data(request)
-        perm = data['perm']
-        try:
-            g = Group.objects.get(name=data['role'])
-        except Group.DoesNotExist:
-            raise NotFound('not found this group')
-        perm_obj = self.get_perm_obj(perm)
-
-        g.permissions.remove(perm_obj)
+        group, perm = self.get_group_and_permission(request)
+        group.permissions.remove(perm)
         return Response({
             'code': 0,
             'msg': 'success'
         })
 
     @staticmethod
-    def check_post_data(request):
+    def get_group_and_permission(request):
         fields = [
             ('*role', str, (verify_max_length, 20)),
             ('*perm', str, (verify_in_array, all_perms.keys()))
         ]
-        return clean_post_data(request.body, tuple(fields))
+        data = clean_post_data(request.body, tuple(fields))
 
-    def get_perm_obj(self, perm_name):
-        return Permission.objects.get(codename=perm_name.split('.')[1])
+        try:
+            group = Group.objects.get(name=data['role'])
+        except Group.DoesNotExist:
+            raise NotFound('not found this group')
+
+        try:
+            perm = Permission.objects.get(codename=data['perm'].split('.')[1])
+        except Permission.DoesNotExist:
+            raise NotFound('not found this permission object')
+
+        return group, perm
 
 
 class GroupMemberEndpoint(APIView):
+    queryset = Group.objects.none()
+    permission_classes = (DjangoModelPermissions,)
 
     def post(self, request):
         """
         将用户添加进某个角色（组）
         """
-        data = self.check_post(request)
-        try:
-            g = Group.objects.get(name=data['role'])
-            u = User.objects.get(username=data['username'])
-        except Group.DoesNotExist:
-            raise NotFound('not found this group')
-        except User.DoesNotExist:
-            raise NotFound('not found this user')
+        group, user = self.get_group_and_member(request)
 
-        g.user_set.add(u)
+        group.user_set.add(user)
         return Response({
             'code': 0,
             'msg': 'success'
@@ -256,7 +255,21 @@ class GroupMemberEndpoint(APIView):
         """
         将用户从某个角色（组）移除
         """
-        data = self.check_post(request)
+        group, user = self.get_group_and_member(request)
+
+        group.user_set.remove(user)
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        })
+
+    @staticmethod
+    def get_group_and_member(request):
+        fields = [
+            ('*role', str, (verify_max_length, 20)),
+            ('*username', str, (verify_max_length, 20))
+        ]
+        data = clean_post_data(request.body, tuple(fields))
         try:
             g = Group.objects.get(name=data['role'])
             u = User.objects.get(username=data['username'])
@@ -264,17 +277,4 @@ class GroupMemberEndpoint(APIView):
             raise NotFound('not found this group')
         except User.DoesNotExist:
             raise NotFound('not found this user')
-
-        g.user_set.remove(u)
-        return Response({
-            'code': 0,
-            'msg': 'success'
-        })
-
-    @staticmethod
-    def check_post(request):
-        fields = [
-            ('*role', str, (verify_max_length, 20)),
-            ('*username', str, (verify_max_length, 20))
-        ]
-        return clean_post_data(request.body, tuple(fields))
+        return g, u
