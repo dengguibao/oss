@@ -44,5 +44,9 @@ DATABASES = {
 }
 ```
 
-
-
+## package
+pip install shiv  
+pip install -r requirement.txt --target ./dist  
+cp -rf oss user common objects account buckets logs db.sqlite3 manage.py ./dist  
+shiv --site-packages dist --compressed -p /usr/bin/env python3 -o oss.pyz -e oss.main  
+refer: https://shiv.readthedocs.io/en/latest/django.html

@@ -132,7 +132,7 @@ def verify_permission(model_name: str, app_label: str = None):
             )
             if request.user.has_perm(perms) and perms:
                 return func(request, *args, **kwargs)
-            raise PermissionDenied('user or role don\'t have this permission')
+            raise PermissionDenied()
 
         return wrapper
 

@@ -341,16 +341,11 @@ def list_user_info_endpoint(request):
         size = settings.PAGE_SIZE
 
     page = PageNumberPagination()
-    # page.page_query_param = 'page'
-    # page.page_size_query_param = 'size'
-
     page.page_size = size
     page.number = cur_page
     page.max_page_size = 20
-
     ret = page.paginate_queryset(user_list.order_by('-id'), request)
     ser = UserSerialize(ret, many=True)
-    # print(page.page_size, page.page_size)
     return Response({
         'code': 0,
         'msg': 'success',
@@ -372,17 +367,15 @@ def get_user_detail_endpoint(request):
     :param request:
     :return:
     """
-    # u = User.objects.get(pk=user_id)
-
     try:
         user_id = request.GET.get('user_id', None)
-        if not user_id or not request.user.is_superuser:
+        if not user_id:
             user_id = request.user.id
 
-        u = User.objects.\
-            select_related('profile').\
-            select_related('capacity_quota').\
-            select_related('bandwidth_quota').\
+        u = User.objects. \
+            select_related('profile'). \
+            select_related('capacity_quota'). \
+            select_related('bandwidth_quota'). \
             select_related('keys').get(id=user_id)
         b = Buckets.objects.filter(user=user_id).values('name')
     except Profile.DoesNotExist:
@@ -390,11 +383,11 @@ def get_user_detail_endpoint(request):
     except ValueError:
         raise ParseError(detail='user_id is not a number')
 
-    # req_username = request.user.username
-    # if not request.user.is_superuser and \
-    #         u.username != req_username and \
-    #         u.profile.parent_uid != req_username:
-    #     raise NotAuthenticated(detail='permission denied!')
+    if not request.user.is_superuser and \
+            u != request.user and \
+            u.profile.parent_uid != request.user.username and \
+            u.profile.root_uid != request.user.username:
+        raise NotAuthenticated()
 
     ser = UserDetailSerialize(u)
     ser_data = ser.data
@@ -572,7 +565,7 @@ def check_date_format(s: str) -> bool:
 
 def cache_request_user_meta_info(token_key, request):
     """
-    将请求用户的ip地址、ua、最新使用时间，结合中token key写入缓存
+    将请求用户的ip地址、ua、最新使用时间，结合token key写入缓存
     用户登陆时，使用cache中的信息校验
     """
     ua = request.META.get('HTTP_USER_AGENT', 'unknown')
