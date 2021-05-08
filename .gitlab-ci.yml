@@ -1,36 +1,11 @@
 stages:
-  - install-dep
-  - test
   - deploy
-  - security-scan
-
-build:
-  stage: install-dep
-  tags:
-    - dev-ubuntu
-  script:
-    # - pip3 install -r ./requirement.txt
-    - mkdir logs
-    - python3 ./manage.py makemigrations
-    - python3 ./manage.py migrate
-
-test:
-  stage: test
-  script:
-    - ls -l
-    - pwd
-    - mkdir logs
-    - python3 ./manage.py test
-    - rm db.sqlite3
-  tags:
-    - dev-ubuntu
 
 deploy:
   stage: deploy
   tags:
     - dev-ubuntu
   script:
-     - mkdir logs
      - rm -f db.sqlite3
      - cp -rf * /home/oss/
      - python3 ./manage.py makemigrations
