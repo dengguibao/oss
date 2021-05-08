@@ -2,3 +2,4 @@
 test.py
 demo.py
 *.log
+*.pyz
