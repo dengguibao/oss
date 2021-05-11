@@ -1,5 +1,6 @@
 import hashlib
 import time
+import threading
 
 from botocore.exceptions import ClientError
 from django.conf import settings
@@ -15,9 +16,8 @@ from rest_framework.status import HTTP_201_CREATED
 
 from buckets.models import Buckets, BucketAcl
 from common.func import verify_path, s3_client, clean_post_data
-from common.tokenauth import verify_permission
 from common.verify import verify_bucket_name, verify_object_name, verify_object_path
-from objects.models import Objects, ObjectAcl
+from objects.models import Objects
 from objects.serializer import ObjectsSerialize
 
 
@@ -76,6 +76,9 @@ def put_object_endpoint(request):
     except Buckets.DoesNotExist:
         raise NotFound('not found this bucket')
 
+    if b.read_only:
+        raise ParseError('this bucket is read only')
+
     bucket_perm = b.permission
 
     if bucket_perm != 'public-read-write':
@@ -122,46 +125,42 @@ def put_object_endpoint(request):
         file_key = root + filename
 
     try:
+
         s3 = s3_client(
-            b.bucket_region.reg_id,
+            b.bucket_region_id,
             b.user.username
         )
 
-        # 利用s3接口进行数据上传至rgw
-        if 'authenticated' not in permission:
-            mp = s3.create_multipart_upload(
-                Bucket=b.name,
-                Key=file_key,
-                ACL=permission
-            )
-        else:
-            mp = s3.create_multipart_upload(
-                Bucket=b.name,
-                Key=file_key,
-                # ACL=permission
-            )
+        # multipart uploader
+        uploader = s3.create_multipart_upload(
+            Bucket=b.name,
+            Key=file_key,
+            ACL=permission if permission.startswith('public-read') else 'private'
+        )
+
         n = 1
         parts = []
         for data in file.chunks(chunk_size=5*1024**2):
             md5.update(data)
-            x = s3.upload_part(
+            part = s3.upload_part(
                 Body=data,
                 Bucket=b.name,
                 ContentLength=len(data),
                 Key=file_key,
-                UploadId=mp['UploadId'],
+                UploadId=uploader['UploadId'],
                 PartNumber=n
             )
             parts.append({
-                'ETag': x['ETag'].replace('"', ''),
+                'ETag': part['ETag'].replace('"', ''),
                 'PartNumber': n
             })
             n += 1
 
-        d = s3.complete_multipart_upload(
+        # multipart completed upload
+        completed = s3.complete_multipart_upload(
             Bucket=b.name,
             Key=file_key,
-            UploadId=mp['UploadId'],
+            UploadId=uploader['UploadId'],
             MultipartUpload={'Parts': parts}
         )
 
@@ -174,8 +173,8 @@ def put_object_endpoint(request):
             'file_size': file.size,
             'key': file_key,
             'md5': md5.hexdigest(),
-            'etag': d['ETag'] if 'ETag' in d else None,
-            'version_id': d['VersionId'] if 'VersionId' in d else None,
+            'etag': completed['ETag'] if 'ETag' in completed else None,
+            'version_id': completed['VersionId'] if 'VersionId' in completed else None,
             'owner_id': b.user.id if bucket_perm == 'public-read-write' else req_user.id,
         }
         if b.version_control:
@@ -185,6 +184,9 @@ def put_object_endpoint(request):
             o, new = Objects.objects.update_or_create(**record_data)
         o.permission = permission
         o.save()
+
+        # backup upload object on the background thread
+        threading.Thread(target=backup_object, args=(o,)).start()
 
     except Exception as e:
         raise ParseError(detail=str(e))
@@ -204,6 +206,7 @@ def put_object_endpoint(request):
 def create_directory_endpoint(request):
     """
     在指定的bucket内创建目录
+    该操作仅存在本地数据库，在ceph不会有任何记录
     """
     req_user = request.user
     _fields = (
@@ -218,6 +221,9 @@ def create_directory_endpoint(request):
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
     except Buckets.DoesNotExist:
         raise NotFound(detail='not fount this bucket')
+
+    if b.read_only:
+        raise ParseError('this bucket is read only')
 
     bucket_perm = b.permission
 
@@ -242,17 +248,12 @@ def create_directory_endpoint(request):
         else:
             key = data['folder_name'] + '/'
 
-        # 初始化s3客户端
-        # s3 = s3_client(b.bucket_region.reg_id, b.user.username)
-        # d = s3.put_object(Bucket=b.name, Body=b'', Key=key)
-        # 创建空对象，目录名为空对象
         record_data = {
             'name': data['folder_name'] + '/',
             'bucket': b,
             'type': 'd',
             'key': key,
             'root': data['path'] if 'path' in data else None,
-            # 后端s3使用桶角色对应的ceph uid写入ceph rgw，本地数据库上传者本身
             'owner': b.user if bucket_perm == 'public-read-write' else req_user
         }
         Objects.objects.create(**record_data)
@@ -343,14 +344,17 @@ def delete_object_endpoint(request):
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
 
+    if o.bucket.read_only:
+        raise ParseError('this bucket is read only')
+
     # 删除文件仅需要具有当前文件对象的权限
     if o.type == 'f':
         obj_perm = o.permission
     # 删除目录需要具有桶权限
-    elif o.type == 'd':
+    if o.type == 'd':
         obj_perm = o.bucket.permission
-    else:
-        obj_perm = 'unknown'
+
+    assert obj_perm in ('public-read-write', 'private', 'public-read', 'authenticated'), 'unknown permission'
 
     if obj_perm != 'public-read-write':
         if isinstance(req_user, AnonymousUser):
@@ -360,38 +364,57 @@ def delete_object_endpoint(request):
     if msg:
         raise NotAuthenticated(msg)
 
-    try:
-        s3 = s3_client(o.bucket.bucket_region.reg_id, o.bucket.user.username)
-        delete_list = []
-        # 如果删除的对象为目录，则删除该目录下的所有一切对象
-        if o.type == 'd':
-            root_pth = '' if o.root is None else o.root
-            obj_name = o.name
-            key = root_pth + obj_name
+    delete_list = []
+    # 如果删除的对象为目录，则删除该目录下的所有一切对象
+    if o.type == 'd':
+        root_pth = '' if o.root is None else o.root
+        obj_name = o.name
+        key = root_pth + obj_name
+        delete_list.append(
+            (o.obj_id, o.key)
+        )
+        # 删除目录则需要删除以提指定路程径开头的所有对象
+        for i in Objects.objects.filter(root__startswith=key, owner=req_user, bucket=o.bucket).all():
             delete_list.append(
-                (o.obj_id, o.key)
+                (i.obj_id, i.key)
             )
-            # 删除目录则需要删除以提指定路程径开头的所有对象
-            for i in Objects.objects.filter(root__startswith=key, owner=req_user, bucket=o.bucket).all():
-                delete_list.append(
-                    (i.obj_id, i.key)
-                )
-        # 如果删除的对象是文件，则只该对象
-        if o.type == 'f':
-            delete_list.append(
-                (o.obj_id, o.key)
-            )
+    # 如果删除的对象是文件，则只该对象
+    if o.type == 'f':
+        delete_list.append(
+            (o.obj_id, o.key)
+        )
 
+    try:
         # 使用s3 client删除对象和对应的数据库映射记录
-        for del_id, del_key in delete_list:
+        s3 = s3_client(o.bucket.bucket_region_id, o.bucket.user.username)
+
+        if o.bucket.backup:
+            backup_bucket = Buckets.objects.get(pid=o.bucket_id)
+            backup_s3 = s3_client(backup_bucket.bucket_region_id, backup_bucket.user.username)
+    except:
+        raise ParseError('initialization s3 client failed!')
+
+    def remove_backup(key: str):
+        try:
+            if backup_bucket in dir():
+                backup_s3.delete_object(
+                    Bucket=backup_bucket.name,
+                    Key=key
+                )
+                Objects.objects.filter(bucket=backup_bucket, key=key).delete()
+        except:
+            pass
+
+    for del_id, del_key in delete_list:
+        try:
             s3.delete_object(
                 Bucket=o.bucket.name,
                 Key=del_key
             )
             Objects.objects.get(obj_id=del_id).delete()
-
-    except Exception as e:
-        raise ParseError(detail=str(e))
+            remove_backup(del_key)
+        except:
+            continue
 
     return Response({
         'code': 0,
@@ -434,7 +457,7 @@ def download_object_endpoint(request):
 
         file_size = obj.file_size
 
-        def file_content(size):
+        def file_content():
             n = 0
             transfer_count = 0
             ts = time.time()
@@ -465,7 +488,7 @@ def download_object_endpoint(request):
                 if n > file_size:
                     break
 
-        res = StreamingHttpResponse(file_content(file_size))
+        res = StreamingHttpResponse(file_content())
         res['Content-Type'] = 'application/octet-stream'
         res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
         return res
@@ -474,3 +497,71 @@ def download_object_endpoint(request):
         raise NotFound('client error')
     except ConnectionError:
         raise ParseError('connection to upstream server timeout')
+
+
+def backup_object(origin: Objects):
+    origin_client = s3_client(origin.bucket.bucket_region_id, origin.owner.username)
+
+    dest_bucket = Buckets.objects.get(pid=origin.bucket_id)
+    dest_client = s3_client(dest_bucket.bucket_region_id, dest_bucket.user.username)
+
+    uploader = dest_client.create_multipart_upload(
+        Bucket=dest_bucket.name,
+        Key=origin.key,
+        ACL=origin.permission if origin.permission.startswith('public-read') else 'private'
+    )
+
+    n = 0
+    min_unit = 5 * 1024 ** 2
+    item = 1
+    parts = []
+    while 1:
+        # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
+        ret_data = origin_client.get_object(
+            Bucket=origin.bucket.name,
+            Key=origin.key,
+            Range='bytes=%s-%s' % (n, n + min_unit - 1),
+        )
+        n += min_unit
+        bin_data = ret_data['Body'].read()
+        part = dest_client.upload_part(
+            Body=bin_data,
+            Bucket=dest_bucket.name,
+            ContentLength=len(bin_data),
+            Key=origin.key,
+            UploadId=uploader['UploadId'],
+            PartNumber=item
+        )
+        parts.append({
+            'ETag': part['ETag'].replace('"', ''),
+            'PartNumber': item
+        })
+
+        if n > origin.file_size:
+            break
+
+    completed = dest_client.complete_multipart_upload(
+        Bucket=dest_bucket.name,
+        Key=origin.key,
+        UploadId=uploader['UploadId'],
+        MultipartUpload={'Parts': parts}
+    )
+    record_data = {
+        'name': origin.name,
+        'bucket_id': dest_bucket.bucket_id,
+        'type': 'f',
+        'root': origin.root,
+        'file_size': origin.file_size,
+        'key': origin.key,
+        'md5': origin.md5,
+        'etag': completed['ETag'] if 'ETag' in completed else None,
+        'version_id': completed['VersionId'] if 'VersionId' in completed else None,
+        'owner_id': origin.owner_id,
+    }
+    if origin.bucket.version_control:
+        result = Objects.objects.create(**record_data)
+    else:
+        result, created = Objects.objects.update_or_create(**record_data)
+
+    result.permission = origin.permission
+    result.save()

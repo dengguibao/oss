@@ -1,6 +1,6 @@
 import re
 import json
-
+from django.db.models import Model
 from django.core.cache import cache
 
 
@@ -109,7 +109,7 @@ def verify_mail(mail: str) -> bool:
     """
     verify mail whether invalid
     """
-    return True if re.match("^.+\\@(\\[?)[a-zA-Z0-9\\-\\.]+\\.([a-zA-Z]{2,3}|[0-9]{1,3})(\\]?)$", mail) else False
+    return True if re.match("^.+@(\\[?)[a-zA-Z0-9\\-.]+\\.([a-zA-Z]{2,3}|[0-9]{1,3})(]?)$", mail) else False
 
 
 def verify_username(username: str) -> bool:
@@ -169,13 +169,13 @@ def verify_number_range(value: int, num_range: tuple):
     return True if x < value < y else False
 
 
-def verify_pk(i: int, model: object) -> bool:
+def verify_pk(i: int, model: Model) -> bool:
     """
     验证某个对象的的主键是否为真实有效
     """
     try:
         model.objects.get(pk=int(i))
-    except:
+    except model.DoesNotExist:
         return False
     return True
 
@@ -250,6 +250,10 @@ def verify_ip_addr(ip: str) -> bool:
             return False
         first = False
     return True
+
+
+def verify_url(value: str):
+    return True if value.startswith('http://') or value.startswith('https://') else False
 
 
 # def verify_body(func):

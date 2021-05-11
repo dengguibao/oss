@@ -1,7 +1,8 @@
-import time
-
 from django.conf import settings
 from django.db.models import Q
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import ParseError, NotFound
 from rest_framework.pagination import PageNumberPagination
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
+
 from rgwadmin.exceptions import NoSuchKey, NoSuchBucket
 
 from buckets.models import BucketRegion, BucketAcl, Buckets
@@ -121,8 +123,7 @@ class BucketEndpoint(APIView):
             bucket_region_id=data['bucket_region_id'],
             version_control=data['version_control'],
             user=request.user,
-            permission=data['permission'],
-            start_time=int(time.time()),
+            permission=data['permission']
         )
 
         return Response({
@@ -135,6 +136,9 @@ class BucketEndpoint(APIView):
         bucket = self.model.objects.select_related('bucket_region').get(pk=data['bucket_id'])
         if bucket.user != request.user and not request.user.is_superuser:
             raise ParseError(detail='illegal delete bucket')
+
+        if bucket.pid > 0:
+            self.model.objects.filter(pk=bucket.pid).update(backup=False)
         try:
             # ceph集群删除bucket
             rgw = rgw_client(bucket.bucket_region.reg_id)
@@ -150,6 +154,33 @@ class BucketEndpoint(APIView):
         except Exception as e:
             raise ParseError(detail=str(e))
 
+        return Response({
+            'code': 0,
+            'msg': 'success'
+        })
+
+    def put(self, request):
+        fields = (
+            self.pk_field[0],
+            ('*bucket_region_id', int, (verify_pk, BucketRegion)),
+        )
+        data = clean_post_data(request.body, fields)
+
+        bucket_region = BucketRegion.objects.get(pk=data['bucket_region_id'])
+        if bucket_region.state != 'e':
+            raise ParseError('region is not enable state')
+
+        b = Buckets.objects.get(pk=data['bucket_id'])
+        if request.user != b.user:
+            raise ParseError('user not match')
+
+        if b.pid > 0:
+            raise ParseError('bucket is backup bucket')
+
+        if b.backup:
+            raise ParseError('backup function is already enable')
+
+        b.create_backup(data['bucket_region_id'])
         return Response({
             'code': 0,
             'msg': 'success'
@@ -210,3 +241,26 @@ def query_bucket_exist(name):
         return False
     else:
         return True
+
+
+@receiver(post_save, sender=Buckets)
+def handler_ceph(sender, instance, created, **kwargs):
+    s3 = s3_client(instance.bucket_region_id, instance.user.username)
+    if created:
+        s3.create_bucket(
+            Bucket=instance.name,
+        )
+    if instance.permission in ('private', 'public-read-write', 'public-read'):
+        s3.put_bucket_acl(
+            Bucket=instance.name,
+            ACL=instance.permission,
+        )
+
+    if instance.version_control:
+        s3.put_bucket_versioning(
+            Bucket=instance.name,
+            VersioningConfiguration={
+                'MFADelete': 'Disabled',
+                'Status': 'Enabled',
+            },
+        )

@@ -25,6 +25,22 @@ class Objects(models.Model):
     def __str__(self):
         return f'obj_id:{self.obj_id}, name:{self.name}, key:{self.key}'
 
+    @property
+    def json(self):
+        return {
+            'bucket_id': self.bucket_id,
+            'name': self.name,
+            'type': self.type,
+            'root': self.root,
+            'file_size': self.file_size,
+            'md5': self.md5,
+            'etag': self.etag,
+            'key': self.key,
+            'version_id': self.version_id,
+            'permission': self.permission,
+            'owner': self.owner_id
+        }
+
     class Meta:
         unique_together = (
             'bucket', 'owner', 'key', 'version_id'
@@ -32,7 +48,7 @@ class Objects(models.Model):
 
 
 class ObjectAcl(models.Model):
-    acl_oid = models.IntegerField(auto_created=True, primary_key=True)
+    acl_oid = models.AutoField(auto_created=True, primary_key=True)
     permission = models.CharField(verbose_name="acl name", max_length=50, blank=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
     object = models.ForeignKey(Objects, on_delete=models.CASCADE, related_name='object_acl')

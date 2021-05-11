@@ -59,8 +59,7 @@ class BucketSerialize(ModelSerializer):
         model = Buckets
         fields = (
             'bucket_id',
-            "name", "capacity", "duration",
-            "start_time", "state", "user",
+            "name", "state", "user",
             "profile", 'cn_status', 'create_time',
             'bucket_region', 'permission', 'version_control'
         )

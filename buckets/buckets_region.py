@@ -4,7 +4,7 @@ from rest_framework.permissions import DjangoModelPermissions
 
 from buckets.models import BucketRegion
 from common.func import clean_post_data
-from common.verify import verify_max_length, verify_pk, verify_in_array
+from common.verify import verify_max_length, verify_pk, verify_in_array, verify_url
 
 
 class BucketRegionEndpoint(APIView):
@@ -16,7 +16,7 @@ class BucketRegionEndpoint(APIView):
         ('*name', str, (verify_max_length, 20)),
         ('*secret_key', str, (verify_max_length, 50)),
         ('*access_key', str, (verify_max_length, 32)),
-        ('*server', str, (verify_max_length, 20)),
+        ('*server', str, verify_url),
         ('*state', str, (verify_in_array, ('e', 'd', 's')))
     ]
     pk_field = (
@@ -44,7 +44,6 @@ class BucketRegionEndpoint(APIView):
     def put(self, request):
         self.fields.append(self.pk_field[0])
         data = clean_post_data(request.body, tuple(self.fields))
-        data['server'] = self.clean_url(data['server'])
         self.queryset = self.model.objects.filter(pk=data['reg_id'])
         self.queryset.update(**data)
         return Response({
@@ -60,10 +59,10 @@ class BucketRegionEndpoint(APIView):
             'msg': 'success'
         })
 
-    @staticmethod
-    def clean_url(url):
-        if 'https://' in url:
-            return url[8:]
-        if 'http://' in url:
-            return url[7:]
-        return url
+    # @staticmethod
+    # def clean_url(url):
+    #     if 'https://' in url:
+    #         return url[8:]
+    #     if 'http://' in url:
+    #         return url[7:]
+    #     return url

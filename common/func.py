@@ -65,9 +65,9 @@ def rgw_client(region_id: int):
     return RGWAdmin(
         access_key=b.access_key,
         secret_key=b.secret_key,
-        server=b.server,
-        secure=False,
-        verify=False
+        server=b.server[7:] if b.server.startswith('http://') else b.server[8:],
+        secure=False if b.server.startswith('http://') else True,
+        verify=False,
     )
 
 
@@ -86,10 +86,11 @@ def s3_client(reg_id: int, username: str):
         return
     region = BucketRegion.objects.get(reg_id=reg_id)
     rgw = rgw_client(reg_id)
+
     try:
-        rgw.get_user(uid=u.keys.ceph_uid)
+        ceph_user = rgw.get_user(uid=u.keys.ceph_uid)
     except NoSuchUser:
-        rgw.create_user(
+        ceph_user = rgw.create_user(
             uid=u.keys.ceph_uid,
             access_key=u.keys.ceph_access_key,
             secret_key=u.keys.ceph_secret_key,
@@ -100,7 +101,10 @@ def s3_client(reg_id: int, username: str):
     except requests.exceptions.ConnectionError:
         raise ParseError('connection to server %s timeout' % region.server)
 
-    if u.capacity_quota.sync == 1:
+    assert ceph_user, ParseError("ceph create user failed")
+
+    user_quota = ceph_user['user_quota']
+    if user_quota['enabled'] is not True or user_quota['max_size_kb'] != u.capacity_quota.capacity*1024**2:
         rgw.set_user_quota(
             uid=u.keys.ceph_uid,
             max_size_kb=u.capacity_quota.capacity*1024**2,
@@ -115,7 +119,7 @@ def s3_client(reg_id: int, username: str):
     )
     client = conn.client(
         service_name='s3',
-        endpoint_url='http://%s' % region.server,
+        endpoint_url=region.server,
         verify=False
     )
     return client
