@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
 from buckets.models import BucketRegion
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_max_length, verify_pk, verify_in_array, verify_url
 
 
@@ -33,7 +33,7 @@ class BucketRegionEndpoint(APIView):
         })
 
     def post(self, request):
-        data = clean_post_data(request.body, tuple(self.fields))
+        data = validate_post_data(request.body, tuple(self.fields))
         self.queryset, create = self.model.objects.update_or_create(**data)
         return Response({
             'code': 0,
@@ -43,7 +43,7 @@ class BucketRegionEndpoint(APIView):
 
     def put(self, request):
         self.fields.append(self.pk_field[0])
-        data = clean_post_data(request.body, tuple(self.fields))
+        data = validate_post_data(request.body, tuple(self.fields))
         self.queryset = self.model.objects.filter(pk=data['reg_id'])
         self.queryset.update(**data)
         return Response({
@@ -52,7 +52,7 @@ class BucketRegionEndpoint(APIView):
         })
 
     def delete(self, request):
-        data = clean_post_data(request.body, self.pk_field)
+        data = validate_post_data(request.body, self.pk_field)
         self.model.objects.get(pk=data['reg_id']).delete()
         return Response({
             'code': 0,

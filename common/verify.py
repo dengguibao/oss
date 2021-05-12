@@ -25,7 +25,7 @@ def verify_is_equal(x, y):
     return True if x == y else False
 
 
-def verify_field(data: bytes, field: tuple):
+def verify_field(data: bytes, fields: tuple):
     """
     使用用户自定义的函数验证用户传过来的数据
     字段格式为（字段名，字段类型，验证方法）， 其中字段名，第一个字符为*的为段包含在字典中的key
@@ -45,62 +45,66 @@ def verify_field(data: bytes, field: tuple):
         return 'json body is too large'
 
     if isinstance(data, bytes):
-        try:
-            data = json.loads(data.decode())
-        except json.decoder.JSONDecodeError:
-            return 'request body is not a json'
+        data = data.decode()
 
-    if isinstance(data, dict):
-        pass
+    try:
+        data = json.loads(data)
+    except json.decoder.JSONDecodeError:
+        return 'request body is not a json'
 
-    buff = {}
+    buff = dict()
 
     # 防止所有字段都为可选字段，但是组合起来必须有一项目
     pass_flag = False
 
-    if isinstance(field, tuple):
-        for field_name, field_type, verify_param in field:
-            # 以*开头的为必选段段
-            if field_name[0] == '*':
-                field_name = field_name[1:]
-                if field_name not in data or \
-                        (data[field_name] not in (True, False) and isinstance(data[field_name], bool)):
-                    return 'field "%s" is necessary, can not be empty' % field_name
-            # 可选字段，不包含进入下一轮loop
-            if field_name not in data:
-                continue
+    assert isinstance(fields, tuple), 'fields format has wrong!'
 
-            # 验证数据类型是否正确
-            if not isinstance(data[field_name], field_type):
-                return 'field %s type wrong!' % field_name
+    for field_name, field_type, verify_param in fields:
+        # 以*开头的为必选段段
 
-            # 带参数的验证方法
-            if verify_param and isinstance(verify_param, tuple) and len(verify_param) > 1:
-                verify_func = verify_param[0]
-                verify_arg = verify_param[1]
-                verify_result = verify_func(data[field_name], verify_arg)
+        if field_name[0] == '*':
+            field_name = field_name[1:]
+            print(data[field_name], type(data[field_name]))
+            if field_name not in data or \
+                    (isinstance(data[field_name], bool) and data[field_name] not in (True, False)) or \
+                    (isinstance(data[field_name], str) and len(data[field_name].strip()) == 0):
+                return 'field "%s" is necessary and value can not be empty' % field_name
 
-            # 不带参数的验证方法
-            if verify_param and hasattr(verify_param, '__call__'):
-                verify_result = verify_param(data[field_name])
+        if field_name not in data:
+            continue
 
-            if verify_param and not verify_result:
-                return 'field %s verify failed!' % field_name
+        # 验证数据类型
+        if not isinstance(data[field_name], field_type):
+            return 'field %s type wrong!' % field_name
 
-            if field_name in data:
-                pass_flag = True
+        verify_result = False
+        # 自定义函数验证
+        if isinstance(verify_param, tuple) and len(verify_param) > 1:
+            verify_func = verify_param[0]
+            verify_arg = verify_param[1]
+            verify_result = verify_func(data[field_name], verify_arg)
+
+        # python语言内置函数验证
+        if hasattr(verify_param, '__call__'):
+            verify_result = verify_param(data[field_name])
+
+        if not verify_result:
+            return 'field %s verify failed!' % field_name
+
+        # 防止所有参数均为可选，但是全部加起来有必选一项
+        if field_name in data:
+            pass_flag = True
 
     if pass_flag:
-        for i, _, _ in field:
-            k = i.strip()
+        for k, _, _ in fields:
             if k[0] == '*':
                 k = k[1:]
 
             if k in data:
                 # 如果是文本内容最多只接收200个字符
-                if isinstance(data[k], str) and len(data[k]) > 200:
-                    data[k] = data[k].strip()[0:200]
-                buff[k] = data[k].strip() if isinstance(data[k], str) else data[k]
+                if isinstance(data[k], str):
+                    data[k] = data[k].strip()[0:1024]
+                buff[k] = data[k]
         return buff
     return False
 

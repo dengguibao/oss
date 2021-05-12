@@ -5,7 +5,7 @@ from rest_framework.status import HTTP_201_CREATED
 from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_pk, verify_username, verify_in_array
 from objects.models import Objects, ObjectAcl
 from objects.objects_perms import verify_file_owner_and_permission
@@ -40,7 +40,7 @@ class ObjectAclEndpoint(APIView):
             ('*username', str, verify_username),
             ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
         )
-        data = clean_post_data(request.body, fields)
+        data = validate_post_data(request.body, fields)
         try:
             self.queryset = Objects.objects.get(obj_id=int(data['obj_id']))
             authorize_user = User.objects.get(username=data['username'])

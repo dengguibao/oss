@@ -15,7 +15,7 @@ from rgwadmin.exceptions import NoSuchKey, NoSuchBucket
 
 from buckets.models import BucketRegion, BucketAcl, Buckets
 from buckets.serializer import BucketSerialize
-from common.func import clean_post_data, s3_client, rgw_client
+from common.func import validate_post_data, s3_client, rgw_client
 from common.tokenauth import verify_permission
 from common.verify import verify_pk, verify_in_array, verify_true_false, verify_bucket_name
 
@@ -89,7 +89,7 @@ class BucketEndpoint(APIView):
         })
 
     def post(self, request):
-        data = clean_post_data(request.body, tuple(self.fields))
+        data = validate_post_data(request.body, tuple(self.fields))
         if query_bucket_exist(data['name']):
             raise ParseError(detail='the bucket is already exist!')
         # 判断容量是否足够
@@ -132,7 +132,7 @@ class BucketEndpoint(APIView):
         }, status=HTTP_201_CREATED)
 
     def delete(self, request):
-        data = clean_post_data(request.body, tuple(self.pk_field))
+        data = validate_post_data(request.body, tuple(self.pk_field))
         bucket = self.model.objects.select_related('bucket_region').get(pk=data['bucket_id'])
         if bucket.user != request.user and not request.user.is_superuser:
             raise ParseError(detail='illegal delete bucket')
@@ -164,7 +164,7 @@ class BucketEndpoint(APIView):
             self.pk_field[0],
             ('*bucket_region_id', int, (verify_pk, BucketRegion)),
         )
-        data = clean_post_data(request.body, fields)
+        data = validate_post_data(request.body, fields)
 
         bucket_region = BucketRegion.objects.get(pk=data['bucket_region_id'])
         if bucket_region.state != 'e':

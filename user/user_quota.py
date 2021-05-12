@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
 from account.models import Plan
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_max_value, verify_number_range, verify_pk
 from user.models import CapacityQuota, BandwidthQuota
 from .signal import create_order
@@ -35,7 +35,7 @@ class CapacityQuotaEndpoint(APIView):
             self.value_field
         )
         force = request.GET.get('force', None)
-        data = clean_post_data(request.data, fields)
+        data = validate_post_data(request.data, fields)
 
         self.queryset = self.model.objects.get(user=request.user)
 
@@ -78,7 +78,7 @@ class CapacityQuotaEndpoint(APIView):
             self.duration_field,
             self.plan_field
         )
-        data = clean_post_data(request.data, fields)
+        data = validate_post_data(request.data, fields)
         self.queryset = self.model.objects.get(user=request.user)
 
         total, offset_total = self.calculate_cost(
@@ -142,7 +142,7 @@ class BandwidthQuotaEndpoint(CapacityQuotaEndpoint):
             self.plan_field
         )
         force = request.GET.get('force', None)
-        data = clean_post_data(request.data, fields)
+        data = validate_post_data(request.data, fields)
 
         self.queryset = self.model.objects.get(user=request.user)
 
@@ -183,7 +183,7 @@ class BandwidthQuotaEndpoint(CapacityQuotaEndpoint):
             self.plan_field,
             self.duration_field,
         )
-        data = clean_post_data(request.data, fields)
+        data = validate_post_data(request.data, fields)
         self.queryset = self.model.objects.get(user=request.user)
 
         total, offset_total = self.calculate_cost(

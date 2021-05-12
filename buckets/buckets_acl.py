@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
 from buckets.models import BucketAcl, Buckets
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_pk, verify_in_array, verify_username
 
 
@@ -44,7 +44,7 @@ class BucketAclEndpoint(APIView):
             ('*username', str, verify_username),
             ('*permission', str, (verify_in_array, ('authenticated-read', 'authenticated-read-write')))
         )
-        data = clean_post_data(request.body, fields)
+        data = validate_post_data(request.body, fields)
         try:
             bucket = Buckets.objects.get(bucket_id=int(data['bucket_id']))
             user = User.objects.get(username=data['username'])

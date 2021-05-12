@@ -178,9 +178,9 @@ def send_phone_verify_code(phone: str):
     return ret.status_code, verify_code
 
 
-def clean_post_data(body_data, fields):
+def validate_post_data(body_data, fields):
     """
-    清理过滤用户post的json数据
+    过滤与验证用户的请求数据
     """
     data = verify_field(body_data, tuple(fields))
     if data and not isinstance(data, dict):

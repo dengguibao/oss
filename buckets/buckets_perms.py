@@ -5,7 +5,7 @@ from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
 from common.tokenauth import verify_permission
 from .models import Buckets
 from common.verify import verify_pk, verify_in_array
-from common.func import clean_post_data
+from common.func import validate_post_data
 
 
 @api_view(('PUT',))
@@ -18,7 +18,7 @@ def set_bucket_perm_endpoint(request):
         ('*bucket_id', int, (verify_pk, Buckets)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
-    data = clean_post_data(request.data, fields)
+    data = validate_post_data(request.data, fields)
 
     b = Buckets.objects.select_related('bucket_region').get(bucket_id=data['bucket_id'])
 

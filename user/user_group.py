@@ -8,7 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.permissions import DjangoModelPermissions
 
 from common.verify import verify_max_length, verify_in_array, verify_pk
-from common.func import verify_super_user, clean_post_data
+from common.func import verify_super_user, validate_post_data
 
 all_perms = {
     "auth.view_user": "查看用户详情及用量",
@@ -91,7 +91,7 @@ def set_default_user_role(request):
     fields = (
         ('*group_id', int, (verify_pk, Group)),
     )
-    data = clean_post_data(request.body, fields)
+    data = validate_post_data(request.body, fields)
     group = Group.objects.get(pk=data['group_id'])
     group.default_group.set_default()
     return Response({
@@ -136,7 +136,7 @@ class GroupEndpoint(APIView):
         fields = [
             ('*name', str, (verify_max_length, 20))
         ]
-        data = clean_post_data(request.body, fields)
+        data = validate_post_data(request.body, fields)
         self.queryset, _ = Group.objects.update_or_create(
             name=data['name']
         )
@@ -220,7 +220,7 @@ class GroupPermissionEndpoint(APIView):
             ('*role', str, (verify_max_length, 20)),
             ('*perm', str, (verify_in_array, all_perms.keys()))
         ]
-        data = clean_post_data(request.body, tuple(fields))
+        data = validate_post_data(request.body, tuple(fields))
 
         try:
             group = Group.objects.get(name=data['role'])
@@ -269,7 +269,7 @@ class GroupMemberEndpoint(APIView):
             ('*role', str, (verify_max_length, 20)),
             ('*username', str, (verify_max_length, 20))
         ]
-        data = clean_post_data(request.body, tuple(fields))
+        data = validate_post_data(request.body, tuple(fields))
         try:
             g = Group.objects.get(name=data['role'])
             u = User.objects.get(username=data['username'])

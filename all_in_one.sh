@@ -2,7 +2,7 @@
 
 rm -rf dist/
 mkdir dist/
-cp -rf __main__.py db.sqlite3 user oss objects common buckets account dist/
+cp -rf db.sqlite3 user oss objects common buckets account dist/
 pip3 freeze > x.txt
 pip3 install -r x.txt --target dist/
 rm -f x.txt

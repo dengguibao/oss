@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view
 
 from common.tokenauth import verify_permission
 from common.verify import verify_pk, verify_in_array
-from common.func import s3_client, clean_post_data
+from common.func import s3_client, validate_post_data
 from .models import Objects, ObjectAcl
 
 
@@ -49,7 +49,7 @@ def set_object_perm_endpoint(request):
         ('*obj_id', int, (verify_pk, Objects)),
         ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated')))
     )
-    data = clean_post_data(request.data, fields)
+    data = validate_post_data(request.data, fields)
 
     o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(obj_id=data['obj_id'])
 

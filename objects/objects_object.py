@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.http import StreamingHttpResponse
+
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
@@ -15,7 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.status import HTTP_201_CREATED
 
 from buckets.models import Buckets, BucketAcl
-from common.func import verify_path, s3_client, clean_post_data
+from common.func import verify_path, s3_client, validate_post_data
 from common.verify import verify_bucket_name, verify_object_name, verify_object_path
 from objects.models import Objects
 from objects.serializer import ObjectsSerialize
@@ -215,7 +216,7 @@ def create_directory_endpoint(request):
         ('path', str, verify_object_path)
     )
     # 检验字段
-    data = clean_post_data(request.body, _fields)
+    data = validate_post_data(request.body, _fields)
     # 检验bucket name是否为非法
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
@@ -384,37 +385,28 @@ def delete_object_endpoint(request):
             (o.obj_id, o.key)
         )
 
-    try:
-        # 使用s3 client删除对象和对应的数据库映射记录
-        s3 = s3_client(o.bucket.bucket_region_id, o.bucket.user.username)
+    # 使用s3 client删除对象和对应的数据库映射记录
+    s3 = s3_client(o.bucket.bucket_region_id, o.bucket.user.username)
 
-        if o.bucket.backup:
-            backup_bucket = Buckets.objects.get(pid=o.bucket_id)
-            backup_s3 = s3_client(backup_bucket.bucket_region_id, backup_bucket.user.username)
-    except:
-        raise ParseError('initialization s3 client failed!')
+    if o.bucket.backup:
+        backup_bucket = Buckets.objects.get(pid=o.bucket_id)
+        backup_s3 = s3_client(backup_bucket.bucket_region_id, backup_bucket.user.username)
 
-    def remove_backup(key: str):
-        try:
-            if backup_bucket in dir():
-                backup_s3.delete_object(
-                    Bucket=backup_bucket.name,
-                    Key=key
-                )
-                Objects.objects.filter(bucket=backup_bucket, key=key).delete()
-        except:
-            pass
+    def remove_backup(object_key: str):
+        if 'backup_s3' in dir():
+            backup_s3.delete_object(
+                Bucket=backup_bucket.name,
+                Key=key
+            )
+            Objects.objects.filter(bucket=backup_bucket, key=object_key).delete()
 
     for del_id, del_key in delete_list:
-        try:
-            s3.delete_object(
-                Bucket=o.bucket.name,
-                Key=del_key
-            )
-            Objects.objects.get(obj_id=del_id).delete()
-            remove_backup(del_key)
-        except:
-            continue
+        s3.delete_object(
+            Bucket=o.bucket.name,
+            Key=del_key
+        )
+        Objects.objects.get(obj_id=del_id).delete()
+        threading.Thread(target=remove_backup, args=(del_key,)).start()
 
     return Response({
         'code': 0,

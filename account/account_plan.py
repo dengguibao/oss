@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from common.func import verify_super_user, clean_post_data
+from common.func import verify_super_user, validate_post_data
 from rest_framework.exceptions import PermissionDenied, ParseError
 from rest_framework.status import HTTP_201_CREATED
 from rest_framework.permissions import DjangoModelPermissions
@@ -8,10 +8,6 @@ from rest_framework.permissions import DjangoModelPermissions
 from common.verify import verify_max_length, verify_max_value, verify_in_array, verify_pk
 from .models import Plan
 # Create your views here.
-
-
-def get_user_order_endpoint(request):
-    pass
 
 
 class PlanEndpoint(APIView):
@@ -45,7 +41,7 @@ class PlanEndpoint(APIView):
         # if not verify_super_user(request):
         #     raise PermissionDenied()
 
-        data = clean_post_data(request.body, tuple(self.model_fields))
+        data = validate_post_data(request.body, tuple(self.model_fields))
 
         self.queryset, created = self.model.objects.update_or_create(**data)
         return Response({
@@ -60,7 +56,7 @@ class PlanEndpoint(APIView):
 
         fields = self.model_fields
         fields.append(self.model_pk[0])
-        data = clean_post_data(request.body, tuple(fields))
+        data = validate_post_data(request.body, tuple(fields))
 
         self.queryset = self.model.objects.get(pk=data['id'])
         self.queryset.__dict__.update(**data)

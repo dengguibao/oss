@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_length, verify_max_value
 
 
@@ -20,7 +20,7 @@ def user_recharge_endpoint(request):
         ('*order_id', str, (verify_length, 10)),
         ('*money', float, (verify_max_value, 99999.0))
     )
-    data = clean_post_data(request.body, fields)
+    data = validate_post_data(request.body, fields)
 
     p = req_user.profile.get()
     p.charge(data['money'])

@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+import random
 import time
 
 
@@ -66,7 +67,7 @@ class Buckets(models.Model):
         self.save()
 
         Buckets.objects.create(
-            name='%s-%s-backup' % (self.name, time.strftime('%Y%m%d', time.localtime())),
+            name='%s-%s-backup' % (self.name, ''.join(random.sample('abcdefghijklmnopqrstuvwxyz0123456789', 8))),
             user=self.user,
             version_control=self.version_control,
             permission=self.permission,

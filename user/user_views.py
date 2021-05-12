@@ -22,7 +22,7 @@ from common.verify import (
     verify_max_length, verify_phone_verification_code,
     verify_img_verification_code
 )
-from common.func import rgw_client, get_client_ip, clean_post_data
+from common.func import rgw_client, get_client_ip, validate_post_data
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, DefaultGroup
 from rgwadmin.exceptions import NoSuchUser
@@ -65,7 +65,7 @@ def create_user_endpoint(request):
         ('verify_code', str, verify_img_verification_code)
     )
 
-    data = clean_post_data(request.body, fields)
+    data = validate_post_data(request.body, fields)
 
     try:
         User.objects.get(username=data['username'])
@@ -135,7 +135,7 @@ def user_login_endpoint(request):
         ('*verify_code', str, (verify_length, 6))
     )
 
-    data = clean_post_data(request.body, fields)
+    data = validate_post_data(request.body, fields)
     # 因为用户名与手机号码均为唯一字段，所以一下条件只会有一个成立
     try:
         u = User.objects.select_related('profile').get(username=data['username'])
@@ -220,7 +220,7 @@ def change_password_endpoint(request):
             ('*old_pwd', str, (verify_max_length, 30))
         )
 
-    data = clean_post_data(request.body, tuple(fields))
+    data = validate_post_data(request.body, tuple(fields))
 
     # 验证两次密码是否一样
     if data['pwd1'] != data['pwd2']:
@@ -268,7 +268,7 @@ def user_delete_endpoint(request):
         ('*username', str, verify_username),
         ('*user_id', int, None)
     )
-    data = clean_post_data(request.body, fields)
+    data = validate_post_data(request.body, fields)
 
     try:
         u = User.objects.get(pk=data['user_id'])

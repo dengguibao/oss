@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import DjangoModelPermissions
 
-from common.func import clean_post_data
+from common.func import validate_post_data
 from common.verify import verify_ip_addr
 from .models import Keys
 
@@ -28,7 +28,7 @@ class KeysEndpoint(APIView):
         fields = (
             ('allow_ip', str, verify_ip_addr),
         )
-        data = clean_post_data(request.body, fields)
+        data = validate_post_data(request.body, fields)
         self.queryset = request.user.keys
         if 'allow_ip' in data: self.queryset.set_allow_access(data['allow_ip'])
         self.queryset.change_user_key()
