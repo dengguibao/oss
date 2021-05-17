@@ -68,6 +68,7 @@ def rgw_client(region_id: int):
         server=b.server[7:] if b.server.startswith('http://') else b.server[8:],
         secure=False if b.server.startswith('http://') else True,
         verify=False,
+        timeout=5,
     )
 
 

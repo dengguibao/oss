@@ -1,6 +1,7 @@
 import hashlib
 import time
 import threading
+from enum import Enum
 
 from botocore.exceptions import ClientError
 from django.conf import settings
@@ -10,7 +11,7 @@ from django.http import StreamingHttpResponse
 
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.exceptions import ParseError, NotFound, NotAuthenticated
+from rest_framework.exceptions import ParseError, NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.status import HTTP_201_CREATED
@@ -18,34 +19,68 @@ from rest_framework.status import HTTP_201_CREATED
 from buckets.models import Buckets, BucketAcl
 from common.func import verify_path, s3_client, validate_post_data
 from common.verify import verify_bucket_name, verify_object_name, verify_object_path
-from objects.models import Objects
+from objects.models import Objects, ObjectAcl
 from objects.serializer import ObjectsSerialize
 
 
-def verify_bucket_owner_and_permission(o: Buckets, request, perm: str):
+class PermAction(Enum):
+    RW = 'read-write'
+    R = 'read'
+
+
+def verify_bucket_owner_and_permission(request, perm: PermAction, b: Buckets = None, o: Objects = None):
     """
     验证文件对象是否有权限访问
-    :param o: Buckets model instance
+    :param b: Buckets model instance
     :param request: WSGI request
-    :param perm: authenticated-read, authenticated-read-write
+    :param perm: read, read-write
+    :param o: Object model instance
     :return if has permission then pass else raise a exception
     """
 
-    if o.permission == 'private':
-        if request.user != o.user:
-            return False, 'bucket owner and request user not match'
+    if not o and not b:
+        raise ParseError('500')
 
-    if o.permission == 'authenticated':
-        allow_user_list = BucketAcl.objects. \
-            filter(bucket_id=o.bucket_id, permission__startswith=perm). \
-            values_list('user_id')
-        allow_user_list = [i[0] for i in allow_user_list]
-        # 桶拥有者、已授权
-        if request.user.id not in allow_user_list and \
-                request.user != o.user:
-            return False, 'current user dont authorize access this bucket'
+    if o:
+        if o.permission == 'public-%s' % perm.value:
+            return
 
-    return True, None
+        if o.permission == 'private':
+            if request.user != o.owner and request.user != o.bucket.user:
+                raise ParseError('file owner not match')
+
+        if o.permission == 'authenticated':
+            object_authorize_user_list = ObjectAcl.objects.filter(
+                object=o, permission__startswith='authenticated-%s' % perm.value
+            ).values_list('user_id', flat=True)
+
+            bucket_authorize_user_list = BucketAcl.objects.filter(
+                bucket=o.bucket, permission__startswith='authenticated-%s' % perm.value
+            ). values_list('user_id', flat=True)
+
+            authorized_list = set(list(object_authorize_user_list)+list(bucket_authorize_user_list))
+            if request.user.id not in authorized_list and \
+                    request.user != o.owner and \
+                    request.user != o.bucket.user:
+                raise ParseError('No authorize access that file')
+
+    if b:
+        if b.permission == 'public-%s' % perm.value:
+            return
+
+        if b.permission == 'private':
+            if request.user != b.user:
+                raise ParseError('bucket owner not match')
+
+        if b.permission == 'authenticated':
+            bucket_authorize_user_list = BucketAcl.objects.filter(
+                bucket_id=b.bucket_id, permission__startswith='authenticated-%s' % perm.value
+            ).values_list('user_id', flat=True)
+
+            # 请求用户不在桶授权列表内、文件授权列表内、不是桶拥有者、文件拥有者
+            if request.user.id not in list(bucket_authorize_user_list) and \
+                    request.user != b.user:
+                raise ParseError('No authorize access that bucket')
 
 
 @api_view(('PUT',))
@@ -80,18 +115,9 @@ def put_object_endpoint(request):
     if b.read_only:
         raise ParseError('this bucket is read only')
 
-    bucket_perm = b.permission
-
-    if bucket_perm != 'public-read-write':
-        if isinstance(req_user, AnonymousUser):
-            raise NotAuthenticated('bucket permission is not public-read-write')
-
-    _, msg = verify_bucket_owner_and_permission(b, request, 'authenticated-read-write')
-    if msg:
-        raise NotAuthenticated(msg)
+    verify_bucket_owner_and_permission(request, PermAction.RW, b)
 
     object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
-
     if len(permission) == 0:
         permission = b.permission
     if permission and permission not in object_allow_acl:
@@ -176,7 +202,7 @@ def put_object_endpoint(request):
             'md5': md5.hexdigest(),
             'etag': completed['ETag'] if 'ETag' in completed else None,
             'version_id': completed['VersionId'] if 'VersionId' in completed else None,
-            'owner_id': b.user.id if bucket_perm == 'public-read-write' else req_user.id,
+            'owner_id': b.user.id if b.permission == 'public-read-write' else req_user.id,
         }
         if b.version_control:
             o = Objects.objects.create(**record_data)
@@ -226,15 +252,7 @@ def create_directory_endpoint(request):
     if b.read_only:
         raise ParseError('this bucket is read only')
 
-    bucket_perm = b.permission
-
-    if bucket_perm != 'public-read-write':
-        if isinstance(req_user, AnonymousUser):
-            raise NotAuthenticated(detail='anonymous user can not access this bucket')
-
-    _, msg = verify_bucket_owner_and_permission(b, request, 'authenticated-read-write')
-    if msg:
-        raise NotAuthenticated(msg)
+    verify_bucket_owner_and_permission(request, PermAction.RW, b)
 
     try:
         if 'path' in data:
@@ -255,7 +273,7 @@ def create_directory_endpoint(request):
             'type': 'd',
             'key': key,
             'root': data['path'] if 'path' in data else None,
-            'owner': b.user if bucket_perm == 'public-read-write' else req_user
+            'owner': b.user if b.permission == 'public-read-write' else req_user
         }
         Objects.objects.create(**record_data)
 
@@ -275,7 +293,6 @@ def list_objects_endpoint(request):
     """
     列出桶内的所有文件对象和目录
     """
-    req_user = request.user
     path = request.GET.get('path', None)
     bucket_name = request.GET.get('bucket_name', None)
 
@@ -284,16 +301,7 @@ def list_objects_endpoint(request):
     except Buckets.DoesNotExist:
         raise NotFound(detail='not found bucket')
 
-    bucket_perm = b.permission
-
-    if bucket_perm not in ('public-read', 'public-read-write'):
-        if isinstance(req_user, AnonymousUser):
-            raise NotAuthenticated('this bucket acl is not contain public')
-
-    _, msg = verify_bucket_owner_and_permission(b, request, 'authenticated-read')
-    if msg:
-        raise NotAuthenticated(msg)
-
+    verify_bucket_owner_and_permission(request, PermAction.R, b)
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
     if path:
@@ -348,22 +356,22 @@ def delete_object_endpoint(request):
     if o.bucket.read_only:
         raise ParseError('this bucket is read only')
 
-    # 删除文件仅需要具有当前文件对象的权限
-    if o.type == 'f':
-        obj_perm = o.permission
-    # 删除目录需要具有桶权限
-    if o.type == 'd':
-        obj_perm = o.bucket.permission
+    # # 删除文件仅需要具有当前文件对象的权限
+    # if o.type == 'f':
+    #     obj_perm = o.permission
+    # # 删除目录需要具有桶权限
+    # if o.type == 'd':
+    #     obj_perm = o.bucket.permission
+    #
+    # assert obj_perm in ('public-read-write', 'private', 'public-read', 'authenticated'), 'unknown permission'
+    #
+    # if obj_perm != 'public-read-write':
+    #     if isinstance(req_user, AnonymousUser):
+    #         raise NotAuthenticated('anonymous user dont allow delete this file or directory')
 
-    assert obj_perm in ('public-read-write', 'private', 'public-read', 'authenticated'), 'unknown permission'
-
-    if obj_perm != 'public-read-write':
-        if isinstance(req_user, AnonymousUser):
-            raise NotAuthenticated('anonymous user dont allow delete this file or directory')
-
-    _, msg = verify_bucket_owner_and_permission(o.bucket, request, 'authenticated-read-write')
-    if msg:
-        raise NotAuthenticated(msg)
+    verify_bucket_owner_and_permission(request, PermAction.RW, o=o)
+    # if msg:
+    #     raise NotAuthenticated(msg)
 
     delete_list = []
     # 如果删除的对象为目录，则删除该目录下的所有一切对象
@@ -433,16 +441,7 @@ def download_object_endpoint(request):
     if obj.type == 'd':
         raise ParseError('download object is a directory')
 
-    obj_perm = obj.permission
-
-    # 判断资源是否为公共可读
-    if 'public' not in obj_perm:
-        if isinstance(request.user, AnonymousUser):
-            raise NotAuthenticated(detail='this resource is not public-read-write')
-
-    _, msg = verify_bucket_owner_and_permission(obj.bucket, request, 'authenticated-read')
-    if msg:
-        raise NotAuthenticated(msg)
+    verify_bucket_owner_and_permission(request, PermAction.R, o=obj)
 
     try:
         s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
@@ -492,7 +491,7 @@ def download_object_endpoint(request):
 
 
 def backup_object(origin: Objects):
-    origin_client = s3_client(origin.bucket.bucket_region_id, origin.owner.username)
+    origin_client = s3_client(origin.bucket.bucket_region.reg_id, origin.owner.username)
 
     dest_bucket = Buckets.objects.get(pid=origin.bucket_id)
     dest_client = s3_client(dest_bucket.bucket_region_id, dest_bucket.user.username)

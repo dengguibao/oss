@@ -64,7 +64,6 @@ def verify_field(data: bytes, fields: tuple):
 
         if field_name[0] == '*':
             field_name = field_name[1:]
-            print(data[field_name], type(data[field_name]))
             if field_name not in data or \
                     (isinstance(data[field_name], bool) and data[field_name] not in (True, False)) or \
                     (isinstance(data[field_name], str) and len(data[field_name].strip()) == 0):
@@ -78,13 +77,13 @@ def verify_field(data: bytes, fields: tuple):
             return 'field %s type wrong!' % field_name
 
         verify_result = False
-        # 自定义函数验证
+        # 自定义校验函数，且提供两个参数
         if isinstance(verify_param, tuple) and len(verify_param) > 1:
             verify_func = verify_param[0]
             verify_arg = verify_param[1]
             verify_result = verify_func(data[field_name], verify_arg)
 
-        # python语言内置函数验证
+        # 自定义检验函数， 只提供一个参数
         if hasattr(verify_param, '__call__'):
             verify_result = verify_param(data[field_name])
 
