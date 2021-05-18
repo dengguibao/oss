@@ -553,6 +553,15 @@ def query_user_usage(request):
     })
 
 
+@api_view(('GET',))
+def get_license_info_endpoint(request):
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'license': settings.LICENSE_INFO
+    })
+
+
 def check_date_format(s: str) -> bool:
     try:
         fmt = '%Y-%m-%d'

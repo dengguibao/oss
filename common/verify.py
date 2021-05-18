@@ -44,13 +44,15 @@ def verify_field(data: bytes, fields: tuple):
     if len(data) > 2*1024**2:
         return 'json body is too large'
 
-    if isinstance(data, bytes):
-        data = data.decode()
-
-    try:
-        data = json.loads(data)
-    except json.decoder.JSONDecodeError:
-        return 'request body is not a json'
+    if isinstance(data, (str, bytes, bytearray)):
+        try:
+            data = json.loads(data)
+        except json.decoder.JSONDecodeError:
+            return 'request body is not a json'
+    elif isinstance(data, dict):
+        pass
+    else:
+        return 'illegal request body'
 
     buff = dict()
 

@@ -17,7 +17,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.status import HTTP_201_CREATED
 
 from buckets.models import Buckets, BucketAcl
-from common.func import verify_path, s3_client, validate_post_data
+from common.func import verify_path, s3_client, validate_post_data, check_license_stat
 from common.verify import verify_bucket_name, verify_object_name, verify_object_path
 from objects.models import Objects, ObjectAcl
 from objects.serializer import ObjectsSerialize
@@ -90,6 +90,7 @@ def put_object_endpoint(request):
     """
     上传文件对象至bucket
     """
+    check_license_stat()
     req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
     # filename = request.POST.get('filename', None)
@@ -235,6 +236,7 @@ def create_directory_endpoint(request):
     在指定的bucket内创建目录
     该操作仅存在本地数据库，在ceph不会有任何记录
     """
+    check_license_stat()
     req_user = request.user
     _fields = (
         ('*bucket_name', str, verify_bucket_name),

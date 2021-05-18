@@ -15,6 +15,9 @@ from pathlib import Path
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+from oss import get_logger
+from oss import get_license
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
@@ -181,19 +184,6 @@ CORS_ALLOW_HEADERS = (
 
 USER_MIN_BANDWIDTH = 4
 
-
-def get_logger():
-    if not os.path.isdir('./logs') or not os.path.exists('./logs'):
-        os.mkdir('./logs')
-    logger = logging.getLogger(__name__)
-    log_filename = './logs/web.log'
-    th = handlers.TimedRotatingFileHandler(log_filename, when='MIDNIGHT', interval=1, encoding='utf-8')
-    log_fmt = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-    th.setFormatter(log_fmt)
-    th.suffix = '%Y%m%d.log'
-    logger.setLevel(logging.INFO)
-    logger.addHandler(th)
-    return logger
-
-
 LOGGER = get_logger()
+
+LICENSE_INFO = get_license()

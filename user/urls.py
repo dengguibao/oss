@@ -8,6 +8,7 @@ from .user_views import (
     get_user_detail_endpoint,
     query_user_exist_endpoint,
     query_user_usage,
+    get_license_info_endpoint,
 )
 from .user_account import user_recharge_endpoint
 from .user_quota import CapacityQuotaEndpoint, BandwidthQuotaEndpoint
@@ -45,5 +46,6 @@ urlpatterns = [
 
     path('user/role/default', set_default_user_role),
 
-    path('user/keys', KeysEndpoint.as_view())
+    path('user/keys', KeysEndpoint.as_view()),
+    path('license', get_license_info_endpoint),
 ]

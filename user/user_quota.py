@@ -1,11 +1,13 @@
+from django.db.models import Sum
 from django.conf import settings
+
 from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
 from account.models import Plan
-from common.func import validate_post_data
+from common.func import validate_post_data, check_license_stat
 from common.verify import verify_max_value, verify_number_range, verify_pk
 from user.models import CapacityQuota, BandwidthQuota
 from .signal import create_order
@@ -35,9 +37,16 @@ class CapacityQuotaEndpoint(APIView):
             self.value_field
         )
         force = request.GET.get('force', None)
-        data = validate_post_data(request.data, fields)
+        data = validate_post_data(request.body, fields)
 
         self.queryset = self.model.objects.get(user=request.user)
+
+        check_license_stat()
+
+        total = self.model.objects.aggregate(Sum('capacity'))
+        if 'max_capacity' not in settings.LICENSE_INFO or \
+                total['capacity__sum'] > settings.LICENSE_INFO['max_capacity']:
+            raise ParseError('license capacity not enough')
 
         if force is None:
             if self.queryset.valid():

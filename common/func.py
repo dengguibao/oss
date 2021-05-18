@@ -12,6 +12,8 @@ import os
 # import uuid
 import requests
 
+from oss import settings
+
 
 def file_iter(filename):
     """
@@ -196,3 +198,8 @@ def verify_super_user(request):
     """
     if not request.user.is_superuser:
         raise PermissionDenied('only allow super user access')
+
+
+def check_license_stat():
+    if 'expire' not in settings.LICENSE_INFO or settings.LICENSE_INFO['expire'] is True:
+        raise ParseError('license is expired!')
