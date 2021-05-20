@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import DjangoModelPermissions
 
 from account.models import Plan
-from common.func import validate_post_data, check_license_stat
+from common.func import validate_post_data, validate_license_expire
 from common.verify import verify_max_value, verify_number_range, verify_pk
 from user.models import CapacityQuota, BandwidthQuota
 from .signal import create_order
@@ -41,8 +41,7 @@ class CapacityQuotaEndpoint(APIView):
 
         self.queryset = self.model.objects.get(user=request.user)
 
-        check_license_stat()
-
+        validate_license_expire()
         total = self.model.objects.aggregate(Sum('capacity'))
         if 'max_capacity' not in settings.LICENSE_INFO or \
                 total['capacity__sum'] > settings.LICENSE_INFO['max_capacity']:
@@ -114,7 +113,8 @@ class CapacityQuotaEndpoint(APIView):
             'data': result
         })
 
-    def calculate_cost(self, user, size: int, duration: int, plan_id: int, type: str):
+    @staticmethod
+    def calculate_cost(user, size: int, duration: int, plan_id: int, _type: str):
         plan = Plan.objects.get(pk=int(plan_id))
         if plan.state != 'e':
             raise ParseError('illegal plan')
@@ -125,10 +125,10 @@ class CapacityQuotaEndpoint(APIView):
         offset = plan.offset if duration >= plan.offset_min_days else 1.0
 
         price = 1.0
-        if type == 'storage':
+        if _type == 'storage':
             price = plan.s_price
 
-        if type == 'bandwidth':
+        if _type == 'bandwidth':
             price = plan.b_price
 
         total = (size*duration*price)/365

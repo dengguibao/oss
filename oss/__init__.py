@@ -84,7 +84,7 @@ def verify(signature: str, data: str):
     return verifier.verify(h, base64.b64decode(signature))
 
 
-def get_logger():
+def get_logger() -> logging.Logger:
     if not os.path.isdir('./logs') or not os.path.exists('./logs'):
         os.mkdir('./logs')
     logger = logging.getLogger(__name__)
@@ -108,12 +108,12 @@ def get_clock() -> int:
         return -1
 
 
-def write_clock():
-    now = time.time()
+def write_clock() -> None:
+    now = int(time.time())
     while True:
         lock.acquire()
         with open('./oss/clock.dat', 'wb') as fp:
             fp.write(str(now).encode())
         lock.release()
-        now += 5
-        time.sleep(5)
+        now += 1
+        time.sleep(1)

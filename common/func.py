@@ -11,6 +11,7 @@ import random
 import os
 # import uuid
 import requests
+from oss import get_clock
 
 from oss import settings
 
@@ -200,6 +201,8 @@ def verify_super_user(request):
         raise PermissionDenied('only allow super user access')
 
 
-def check_license_stat():
-    if 'expire' not in settings.LICENSE_INFO or settings.LICENSE_INFO['expire'] is True:
+def validate_license_expire():
+    # print(get_clock(), settings.LICENSE_INFO['end_time'])
+    c = get_clock()
+    if c <= 0 or c > settings.LICENSE_INFO['end_time']:
         raise ParseError('license is expired!')
