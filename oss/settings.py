@@ -20,6 +20,9 @@ from oss import get_license
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+LOGGER = get_logger()
+
+LICENSE_INFO = get_license()
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
@@ -116,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = LICENSE_INFO['time_zone'] if 'time_zone' in LICENSE_INFO else 'UTC'
 
 USE_I18N = True
 
@@ -183,7 +186,3 @@ CORS_ALLOW_HEADERS = (
 )
 
 USER_MIN_BANDWIDTH = 4
-
-LOGGER = get_logger()
-
-LICENSE_INFO = get_license()

@@ -78,9 +78,9 @@ def get_license():
 
 
 def verify(signature: str, data: str):
-    pubKey = RSA.importKey(public_key)
+    rsa_pub_key = RSA.importKey(public_key)
     h = MD5.new(data.encode())
-    verifier = PKCS1_v1_5.new(pubKey)
+    verifier = PKCS1_v1_5.new(rsa_pub_key)
     return verifier.verify(h, base64.b64decode(signature))
 
 

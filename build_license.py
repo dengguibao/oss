@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import os
 import sys
 
 from Crypto.PublicKey import RSA
@@ -59,20 +62,48 @@ xSYTnXdcXEwWWjrzXN+mB07nDYJP3q693UMiaZkyjNkQEv+I1FmlkgAzsqnsID74LS43HGq
 FODLy7eKFro0yUrJR62fzwxg+HCG07Hmo+h++8ers56PO6f1Ghe4EDNlUHvZWjcOeGuzu8=
 '''
 
+now = int(time.time())
 
-def sign(data: str) -> bytes:
+
+def sign(cmd_args) -> None:
+    data = {
+        'max_users': 5,
+        'max_bucket': 100,
+        'max_capacity': cmd_args.capacity,
+        'start_time': now,
+        'end_time': now+(86400*cmd_args.days),
+        'time_zone': cmd_args.time_zone,
+        'info': cmd_args.info
+    }
     rsa_private_key = RSA.importKey(private_key)
     signer = PKCS1_v1_5.new(rsa_private_key)
-    hash_obj = MD5.new(data.encode())
+    hash_obj = MD5.new(json.dumps(data).encode())
     _signature = base64.b64encode(signer.sign(hash_obj))
-    return _signature
+    data['signature'] = _signature.decode()
+    with open('./license.lic', 'wb') as fp:
+        fp.write(json.dumps(data).encode())
+    print('success')
 
 
-def verify(_signature: bytes, data: str):
+def verify(cmd_args):
+    filename = cmd_args.file
+    if not os.path.isfile(filename) and not os.path.exists(filename):
+        return False
+    with open(args.file, 'rb') as fp:
+        data = fp.read()
     rsa_public_key = RSA.importKey(public_key)
-    hash_obj = MD5.new(data.encode())
+    try:
+        lic_json = json.loads(data)
+    except json.JSONDecodeError:
+        return False
+    _signature = lic_json['signature']
+    del lic_json['signature']
+    hash_obj = MD5.new(json.dumps(lic_json).encode())
     verifier = PKCS1_v1_5.new(rsa_public_key)
-    return verifier.verify(hash_obj, base64.b64decode(_signature))
+    if verifier.verify(hash_obj, base64.b64decode(_signature)):
+        print('success')
+    else:
+        print('failed!')
 
 
 if __name__ == '__main__':
@@ -81,34 +112,18 @@ if __name__ == '__main__':
         av.append('-h')
 
     parser = argparse.ArgumentParser(description='Build license program')
-    parser.add_argument('--days', type=int, required=True, help="license validity days")
-    parser.add_argument('--info', type=str, required=True, help="corporation information")
-    parser.add_argument('--capacity', type=int, required=True, help="license max capacity")
-    # parser.add_argument('--max-users', type=int, required=True, help="license max capacity")
-    # parser.add_argument('--max-bucket', type=int, required=True, help="license max capacity")
+    subparsers = parser.add_subparsers()
+
+    p_sig = subparsers.add_parser('signature')
+    p_sig.add_argument('--days', type=int, required=True, help="license validity days")
+    p_sig.add_argument('--info', type=str, required=True, help="corporation information")
+    p_sig.add_argument('--capacity', type=int, required=True, help="license max capacity")
+    p_sig.add_argument('--time-zone', type=str, default='UTC', help="time zone, default UTC")
+    p_sig.set_defaults(func=sign)
+
+    p_verify = subparsers.add_parser('verify')
+    p_verify.add_argument('--file', type=str, default='license.lic', help='license file, default ./license.lic')
+    p_verify.set_defaults(func=verify)
 
     args = parser.parse_args(av)
-
-    DAYS = args.days
-    MAX_CAPACITY = args.capacity
-    INFO = args.info
-
-    now = int(time.time())
-
-    user_license = {
-        'max_users': 5,
-        'max_bucket': 100,
-        'max_capacity': MAX_CAPACITY,
-        'start_time': now,
-        'end_time': now+(86400*DAYS),
-        'info': INFO
-    }
-
-    signature = sign(json.dumps(user_license))
-    if verify(signature, json.dumps(user_license)):
-        user_license['signature'] = signature.decode()
-        with open('license.lic', 'wb') as fp:
-            fp.write(json.dumps(user_license).encode())
-        print('success')
-    else:
-        print('failed')
+    args.func(args)
