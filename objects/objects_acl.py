@@ -8,7 +8,7 @@ from rest_framework.permissions import DjangoModelPermissions
 from common.func import validate_post_data
 from common.verify import verify_pk, verify_username, verify_in_array
 from objects.models import Objects, ObjectAcl
-from objects.objects_perms import verify_file_owner_and_permission
+from objects.objects_perms import verify_file_owner_and_permission, PermAction
 
 
 class ObjectAclEndpoint(APIView):
@@ -53,9 +53,7 @@ class ObjectAclEndpoint(APIView):
                 authorize_user.profile.parent_uid != request.user.username:
             raise ParseError('only support authorized to sub user')
 
-        _, msg = verify_file_owner_and_permission(self.queryset, request, 'authenticated-read-write')
-        if msg:
-            raise NotAuthenticated(msg)
+        verify_file_owner_and_permission(request, PermAction.RW, self.queryset)
 
         ObjectAcl.objects.update_or_create(
             object=self.queryset,
@@ -79,9 +77,7 @@ class ObjectAclEndpoint(APIView):
         except TypeError:
             raise ParseError('acl_oid is not a number')
 
-        _, msg = verify_file_owner_and_permission(self.queryset, request, 'authenticated-read-write')
-        if msg:
-            raise ParseError(msg)
+        verify_file_owner_and_permission(request, PermAction.RW, self.queryset)
 
         self.queryset.delete()
 
