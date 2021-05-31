@@ -102,6 +102,8 @@ def verify(cmd_args):
     verifier = PKCS1_v1_5.new(rsa_public_key)
     if verifier.verify(hash_obj, base64.b64decode(_signature)):
         print('success')
+        if time.time() >= lic_json['end_time']:
+            print('license expired!')
     else:
         print('failed!')
 

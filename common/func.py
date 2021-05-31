@@ -5,6 +5,7 @@ from common.verify import verify_field
 from objects.models import Objects
 from buckets.models import BucketRegion
 from django.contrib.auth.models import User
+from django.conf import Settings
 from rgwadmin.exceptions import NoSuchUser
 from hashlib import md5
 import random
@@ -103,7 +104,9 @@ def s3_client(reg_id: int, username: str):
             user_caps='buckets=read,write;user=read,write;usage=read'
         )
     except requests.exceptions.ConnectionError:
-        raise ParseError('connection to server %s timeout' % region.server)
+        msg = 'connection to server %s timeout' % region.server
+        settings.LOGGER.error(msg)
+        raise ParseError(msg)
 
     assert ceph_user, ParseError("ceph create user failed")
 

@@ -1,3 +1,4 @@
+from pymemcache.exceptions import MemcacheError
 from django.contrib.auth.models import User
 from rest_framework.authentication import BaseAuthentication
 from user.models import Keys
@@ -15,7 +16,11 @@ class TokenAuthentication(BaseAuthentication):
     def authenticate(self, request):
         client_ip = get_client_ip(request)
         block_key = 'block_ip_%s' % client_ip
-        block_times = cache.get(block_key)
+        try:
+            block_times = cache.get(block_key)
+        except (ConnectionRefusedError, MemcacheError):
+            raise exceptions.APIException('memcached service is not ready!')
+
         if block_times and block_times >= 2:
             raise exceptions.APIException('your ip address is blocked, will be auto resume after 2 hours')
 

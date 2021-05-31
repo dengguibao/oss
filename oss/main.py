@@ -10,11 +10,17 @@ django.setup()
 
 
 try:
-    production = sys.argv[1] == "production"
+    arg1 = sys.argv[1]
 except IndexError:
-    production = False
+    print()
+    print('usage: [initialization | production [--host <0.0.0.0>] [--port <8080>] [--worker <4>]]')
+    print('--host: listen host, default 0.0.0.0')
+    print('--port: listen port, default 8000, max 65535')
+    print('--worker: worker thread number, default 4, max 16')
+    print()
+    exit()
 
-if production:
+if arg1 == "production":
     import gunicorn.app.wsgiapp as wsgi
 
     default_port = 8000
@@ -64,15 +70,9 @@ if production:
     sys.argv = [".", "oss.wsgi", "--bind=%s:%s" % (host, port),  "--workers=%s" % worker]
 
     wsgi.run()
-else:
-    # from django.core.management import call_command
 
-    print()
-    print('usage: production [--host <0.0.0.0>] [--port <8080>] [--worker <4>]')
-    print('--host: listen host, default 0.0.0.0')
-    print('--port: listen port, default 8000, max 65535')
-    print('--worker: worker thread number, default 4, max 16')
-    print()
-
+elif arg1 == 'initialization':
+    from django.core.management import call_command
+    call_command('makemigrations')
+    call_command('migrate')
     exit()
-    # call_command("runserver")

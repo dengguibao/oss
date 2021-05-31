@@ -57,16 +57,14 @@ class SimpleUserSerialize(ModelSerializer):
 class UserSerialize(ModelSerializer):
     profile = ProfileSerialize(read_only=True)
     capacity_quota = CapacityQuotaSerialize(read_only=True)
-    keys = KeysSerialize()
+    # keys = KeysSerialize()
     bandwidth_quota = BandwidthSerialize()
 
     class Meta:
         model = User
         fields = (
-            'id', 'is_superuser', 'username',
-            'is_active', 'first_name', 'last_login',
-            'date_joined', 'email', 'profile', 'capacity_quota',
-            'keys', 'bandwidth_quota'
+            'id', 'is_superuser', 'username', 'is_active', 'first_name', 'last_login',
+            'date_joined', 'email', 'profile', 'capacity_quota', 'bandwidth_quota'
 
         )
 

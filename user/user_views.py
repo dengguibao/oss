@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 
-from requests.exceptions import ConnectionError
+from requests.exceptions import ConnectionError, ReadTimeout
 
 from buckets.models import BucketRegion, Buckets
 from common.tokenauth import verify_permission
@@ -408,9 +408,7 @@ def get_user_detail_endpoint(request):
                 'stats': x['stats']
             })
             # ser_data['ceph'][i.name]['stats'] = x
-        except ConnectionError:
-            continue
-        except NoSuchUser:
+        except (ConnectionError, NoSuchUser, ReadTimeout):
             continue
 
     return Response({
@@ -495,9 +493,7 @@ def query_user_usage(request):
         rgw = rgw_client(i.reg_id)
         try:
             rgw.get_user(uid=req_user.keys.ceph_uid)
-        except NoSuchUser:
-            continue
-        except ConnectionError:
+        except (NoSuchUser, ConnectionError):
             continue
 
         # print(start_time, end_time, u.profile.ceph_uid)

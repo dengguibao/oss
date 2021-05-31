@@ -17,12 +17,16 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 from oss import get_logger
 from oss import get_license
+from oss import get_db_config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 LOGGER = get_logger()
 
 LICENSE_INFO = get_license()
+
+DB_CONFIG = get_db_config()
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
@@ -90,7 +94,7 @@ WSGI_APPLICATION = 'oss.wsgi.application'
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
+    'default': DB_CONFIG if DB_CONFIG else {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }

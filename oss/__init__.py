@@ -108,6 +108,21 @@ def get_clock() -> int:
         return -1
 
 
+def get_db_config() -> dict:
+    if not os.path.exists('db.json'):
+        return dict()
+
+    with open('db.json', 'rb') as fp:
+        data = fp.read()
+
+    try:
+        j = json.loads(data)
+    except json.JSONDecodeError:
+        return dict()
+    else:
+        return j
+
+
 def write_clock() -> None:
     now = int(time.time())
     while True:
