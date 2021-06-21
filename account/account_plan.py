@@ -75,7 +75,7 @@ class PlanEndpoint(APIView):
             plan_id = request.GET.get('id', None)
             self.queryset = self.model.objects.get(pk=int(plan_id))
             self.queryset.delete()
-        except self.model.DoesNotExist:
+        except (self.model.DoesNotExist, ValueError):
             raise ParseError('illegal id')
         return Response({
             'code': 0,

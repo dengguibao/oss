@@ -61,25 +61,31 @@ def build_cn_permission_list(user_perms, _type: str = 'long'):
             for k, v in all_perms.items():
                 if i in k:
                     data.append({
-                        'codename': k,
-                        'cn_name': v
+                        'key': k,
+                        'label': v
                     })
 
         if _type == 'long':
             if i in all_perms:
                 data.append({
-                    'codename': i,
-                    'cn_name': all_perms[i]
+                    'key': i,
+                    'label': all_perms[i]
                 })
     return data
 
 
 @api_view(('GET',))
 def list_all_available_perms_endpoint(request):
+    data = []
+    for k, v in all_perms.items():
+        data.append({
+            'key': k,
+            'label': v
+        })
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': all_perms
+        'data': data
     })
 
 
@@ -111,7 +117,13 @@ class GroupEndpoint(APIView):
         if not request.user.has_perm('auth.view_group'):
             raise PermissionDenied()
 
-        self.queryset = Group.objects.prefetch_related('permissions').prefetch_related('user_set__groups').all()
+        role_name = request.GET.get('name', None)
+        data_source = Group.objects.prefetch_related('permissions').prefetch_related('user_set__groups')
+        if role_name:
+            self.queryset = data_source.filter(name=role_name)
+        else:
+            self.queryset = data_source.all()
+
         data = []
         for i in self.queryset:
             data.append({
@@ -196,8 +208,9 @@ class GroupPermissionEndpoint(APIView):
         """
         将权限授权给某个角色（组）
         """
-        group, perm = self.get_group_and_permission(request)
-        group.permissions.add(perm)
+        group, perms = self.get_group_and_permission(request)
+        for p in perms:
+            group.permissions.add(p)
         return Response({
             'code': 0,
             'msg': 'success'
@@ -207,8 +220,9 @@ class GroupPermissionEndpoint(APIView):
         """
         将权限从某个角色（组）中移除
         """
-        group, perm = self.get_group_and_permission(request)
-        group.permissions.remove(perm)
+        group, perms = self.get_group_and_permission(request)
+        for p in perms:
+            group.permissions.remove(p)
         return Response({
             'code': 0,
             'msg': 'success'
@@ -218,7 +232,7 @@ class GroupPermissionEndpoint(APIView):
     def get_group_and_permission(request):
         fields = [
             ('*role', str, (verify_max_length, 20)),
-            ('*perm', str, (verify_in_array, all_perms.keys()))
+            ('*perms', list, len)
         ]
         data = validate_post_data(request.body, tuple(fields))
 
@@ -227,12 +241,17 @@ class GroupPermissionEndpoint(APIView):
         except Group.DoesNotExist:
             raise NotFound('not found this group')
 
-        try:
-            perm = Permission.objects.get(codename=data['perm'].split('.')[1])
-        except Permission.DoesNotExist:
-            raise NotFound('not found this permission object')
+        perms = []
+        for p in data['perms']:
+            try:
+                perm = Permission.objects.get(codename=p.split('.')[1])
+            except Permission.DoesNotExist:
+                continue
+                # raise NotFound('not found this permission object')
+            else:
+                perms.append(perm)
 
-        return group, perm
+        return group, perms
 
 
 class GroupMemberEndpoint(APIView):

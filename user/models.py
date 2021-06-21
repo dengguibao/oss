@@ -153,12 +153,17 @@ class BandwidthQuota(models.Model):
         self.save()
         return self.json
 
+    def valid(self):
+        if time.time() > self.start_time + (self.duration * 86400):
+            return False
+        return True
+
     @property
     def json(self):
         return {
             'start_time': time.strftime('%F', time.localtime(self.start_time)),
             'duration': self.duration,
-            'capacity': self.bandwidth,
+            'bandwidth': self.bandwidth,
         }
 
 

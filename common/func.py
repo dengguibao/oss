@@ -47,12 +47,12 @@ def verify_path(path):
         return obj
 
 
-def build_tmp_filename():
-    """
-    随机生成一个临时文件名
-    """
-    file_name = '/tmp/ceph_oss_%s.dat' % random_build_str(10)
-    return file_name
+# def build_tmp_filename():
+#     """
+#     随机生成一个临时文件名
+#     """
+#     file_name = '/tmp/ceph_oss_%s.dat' % random_build_str(10)
+#     return file_name
 
 
 def rgw_client(region_id: int):

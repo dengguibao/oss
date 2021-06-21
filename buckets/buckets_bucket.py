@@ -44,8 +44,8 @@ class BucketEndpoint(APIView):
         # 管理员查询所有用户的bucket，非管理员仅可查看自己的bucket
         if not request.user.is_superuser:
             # 查询已授到用户的所有桶列表
-            authorized_bucket = BucketAcl.objects.filter(user=request.user).values_list('bucket_id')
-            authorized_bucket_list = [i[0] for i in authorized_bucket]
+            authorized_bucket_list = BucketAcl.objects.filter(user=request.user).values_list('bucket_id', flat=True)
+            # authorized_bucket_list = [i[0] for i in authorized_bucket]
             self.queryset = bucket_obj.filter(
                 Q(user=request.user) |
                 Q(bucket_id__in=authorized_bucket_list)
@@ -243,24 +243,24 @@ def query_bucket_exist(name):
         return True
 
 
-@receiver(post_save, sender=Buckets)
-def handler_ceph(sender, instance, created, **kwargs):
-    s3 = s3_client(instance.bucket_region_id, instance.user.username)
-    if created:
-        s3.create_bucket(
-            Bucket=instance.name,
-        )
-    if instance.permission in ('private', 'public-read-write', 'public-read'):
-        s3.put_bucket_acl(
-            Bucket=instance.name,
-            ACL=instance.permission,
-        )
-
-    if instance.version_control:
-        s3.put_bucket_versioning(
-            Bucket=instance.name,
-            VersioningConfiguration={
-                'MFADelete': 'Disabled',
-                'Status': 'Enabled',
-            },
-        )
+# @receiver(post_save, sender=Buckets)
+# def handler_ceph(sender, instance, created, **kwargs):
+#     s3 = s3_client(instance.bucket_region_id, instance.user.username)
+#     if created:
+#         s3.create_bucket(
+#             Bucket=instance.name,
+#         )
+#     if instance.permission in ('private', 'public-read-write', 'public-read'):
+#         s3.put_bucket_acl(
+#             Bucket=instance.name,
+#             ACL=instance.permission,
+#         )
+#
+#     if instance.version_control:
+#         s3.put_bucket_versioning(
+#             Bucket=instance.name,
+#             VersioningConfiguration={
+#                 'MFADelete': 'Disabled',
+#                 'Status': 'Enabled',
+#             },
+#         )

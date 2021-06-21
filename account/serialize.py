@@ -16,7 +16,7 @@ class OrderSerialize(ModelSerializer):
     cn_product = SerializerMethodField()
 
     def get_cn_product(self, obj):
-        return 'storage' if obj.product == 's' else 'bandwidth'
+        return '存储' if obj.product == 's' else '带宽'
 
     class Meta:
         model = Order

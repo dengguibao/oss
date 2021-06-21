@@ -214,7 +214,8 @@ def put_object_endpoint(request):
         o.save()
 
         # backup upload object on the background thread
-        threading.Thread(target=backup_object, args=(o,)).start()
+        if b.backup:
+            threading.Thread(target=backup_object, args=(o,)).start()
 
     except Exception as e:
         raise ParseError(detail=str(e))
