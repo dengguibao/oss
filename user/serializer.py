@@ -23,6 +23,10 @@ class KeysSerialize(ModelSerializer):
 
 class BandwidthSerialize(ModelSerializer):
     deadline = SerializerMethodField()
+    expired = SerializerMethodField()
+
+    def get_expired(self, obj):
+        return True if obj.valid() is False else False
 
     def get_deadline(self, obj):
         ts = time.localtime(obj.start_time+(obj.duration*86400))
@@ -36,6 +40,11 @@ class BandwidthSerialize(ModelSerializer):
 class CapacityQuotaSerialize(ModelSerializer):
 
     deadline = SerializerMethodField()
+    expired = SerializerMethodField()
+
+    def get_expired(self, obj):
+        return True if obj.valid() is False else False
+
 
     def get_deadline(self, obj):
         ts = time.localtime(obj.start_time + (obj.duration * 86400))

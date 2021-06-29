@@ -141,12 +141,15 @@ class BucketEndpoint(APIView):
             self.model.objects.filter(pk=bucket.pid).update(backup=False)
         try:
             # ceph集群删除bucket
+            print(bucket.name)
             rgw = rgw_client(bucket.bucket_region.reg_id)
             rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
             # 删除数据记录
             bucket.delete()
         except NoSuchKey:
-            raise ParseError('delete bucket failed, purge objects not found any key')
+            print(bucket.name)
+            rgw.remove_bucket(bucket=bucket.name)
+            # raise ParseError('delete bucket failed, purge objects not found any key')
 
         except NoSuchBucket:
             raise ParseError('delete bucket failed, not found this bucket')
@@ -243,24 +246,24 @@ def query_bucket_exist(name):
         return True
 
 
-# @receiver(post_save, sender=Buckets)
-# def handler_ceph(sender, instance, created, **kwargs):
-#     s3 = s3_client(instance.bucket_region_id, instance.user.username)
-#     if created:
-#         s3.create_bucket(
-#             Bucket=instance.name,
-#         )
-#     if instance.permission in ('private', 'public-read-write', 'public-read'):
-#         s3.put_bucket_acl(
-#             Bucket=instance.name,
-#             ACL=instance.permission,
-#         )
-#
-#     if instance.version_control:
-#         s3.put_bucket_versioning(
-#             Bucket=instance.name,
-#             VersioningConfiguration={
-#                 'MFADelete': 'Disabled',
-#                 'Status': 'Enabled',
-#             },
-#         )
+@receiver(post_save, sender=Buckets)
+def handler_ceph(sender, instance, created, **kwargs):
+    s3 = s3_client(instance.bucket_region_id, instance.user.username)
+    if created and '-backup' in instance.name:
+        s3.create_bucket(
+            Bucket=instance.name,
+        )
+    if instance.permission in ('private', 'public-read-write', 'public-read'):
+        s3.put_bucket_acl(
+            Bucket=instance.name,
+            ACL=instance.permission,
+        )
+
+    if instance.version_control:
+        s3.put_bucket_versioning(
+            Bucket=instance.name,
+            VersioningConfiguration={
+                'MFADelete': 'Disabled',
+                'Status': 'Enabled',
+            },
+        )

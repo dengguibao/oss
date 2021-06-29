@@ -103,7 +103,7 @@ def put_object_endpoint(request):
         raise ParseError(detail='some required field is mission')
 
     filename = file.name
-    for i in [',', '/', '\\']:
+    for i in [',', '/', '\\', '|']:
         if i in filename:
             raise ParseError(detail='filename contains some special char')
 

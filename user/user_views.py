@@ -395,21 +395,21 @@ def get_user_detail_endpoint(request):
     # ser_data['objects'] = {
     #     'count': Objects.objects.filter(owner=request.user, type='f').count()
     # }
-    ser_data['real_usage'] = []
-    region = BucketRegion.objects.all()
-
-    for i in region:
-        rgw = rgw_client(i.reg_id)
-        try:
-            x = rgw.get_user(uid=request.user.keys.ceph_uid, stats=True)
-            ser_data['real_usage'].append({
-                'region': i.name,
-                'quota': x['user_quota'],
-                'stats': x['stats']
-            })
-            # ser_data['ceph'][i.name]['stats'] = x
-        except (ConnectionError, NoSuchUser, ReadTimeout):
-            continue
+    # ser_data['real_usage'] = []
+    # region = BucketRegion.objects.all()
+    #
+    # for i in region:
+    #     rgw = rgw_client(i.reg_id)
+    #     try:
+    #         x = rgw.get_user(uid=request.user.keys.ceph_uid, stats=True)
+    #         ser_data['real_usage'].append({
+    #             'region': i.name,
+    #             'quota': x['user_quota'],
+    #             'stats': x['stats']
+    #         })
+    #         # ser_data['ceph'][i.name]['stats'] = x
+    #     except (ConnectionError, NoSuchUser, ReadTimeout):
+    #         continue
 
     return Response({
         'code': 0,
@@ -489,6 +489,7 @@ def query_user_usage(request):
 
     usage_data = []
     reg = BucketRegion.objects.all()
+    all_region_usage = []
     for i in reg:
         rgw = rgw_client(i.reg_id)
         try:
@@ -498,6 +499,8 @@ def query_user_usage(request):
 
         # print(start_time, end_time, u.profile.ceph_uid)
         def build_usage_data(origin_data):
+            if len(origin_data['entries']) == 0:
+                return []
             buff = {}
             for bucket in origin_data['entries'][0]['buckets']:
                 act_time = bucket['time'][:10]
@@ -518,16 +521,17 @@ def query_user_usage(request):
                     if 'category' in cate and cate['category'] == 'get_obj':
                         buff[act_time]['get_obj']['successful_ops'] += cate['successful_ops']
                         buff[act_time]['get_obj']['bytes_sent'] += cate['bytes_sent']
-            s_key = sorted(buff)
-            __data = []
-            for k in s_key:
-                __tmp = {
-                    'data': k
-                }
-                __tmp.update(buff[k])
-                __data.append(__tmp)
-                del __tmp
-            return __data
+            # s_key = sorted(buff)
+            # __data = []
+            # for k in s_key:
+            #     __tmp = {
+            #         'date': k
+            #     }
+            #     __tmp.update(buff[k])
+            #     __data.append(__tmp)
+            #     del __tmp
+            # return __data
+            return buff
 
         data = rgw.get_usage(
             uid=u.keys.ceph_uid,
@@ -536,10 +540,32 @@ def query_user_usage(request):
             show_summary=True,
             show_entries=True
         )
+        all_region_usage.append(build_usage_data(data))
+        # usage_data.append({
+        #     'region': i.name,
+        #     'usage_data': build_usage_data(data),
+            # 'summary': data['summary']
+        # })
+
+    tmp = {}
+    for i in all_region_usage:
+        if not i:
+            continue
+        # print(i)
+        for k, v in i.items():
+            if k not in tmp:
+                tmp[k] = v
+            else:
+                tmp[k]['get_obj']['successful_ops'] += v['successful_ops']
+                tmp[k]['get_obj']['bytes_sent'] += v['bytes_sent']
+
+                tmp[k]['put_obj']['successful_ops'] += v['successful_ops']
+                tmp[k]['put_obj']['bytes_sent'] += v['bytes_sent']
+
+    for k, v in tmp.items():
         usage_data.append({
-            'region': i.name,
-            'usage_data': build_usage_data(data),
-            'summary': data['summary']
+            'date': k,
+            'usage': v
         })
 
     return Response({
