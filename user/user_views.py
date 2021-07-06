@@ -20,7 +20,7 @@ from common.verify import (
     verify_mail, verify_username,
     verify_phone, verify_length,
     verify_max_length, verify_phone_verification_code,
-    verify_img_verification_code
+    verify_img_verification_code, verify_pk
 )
 from common.func import rgw_client, get_client_ip, validate_post_data
 from .serializer import UserSerialize, UserDetailSerialize
@@ -42,7 +42,7 @@ def create_user_endpoint(request):
     """
     try:
         sub_user = int(request.GET.get('sub_user', False))
-    except ValueError:
+    except (ValueError, TypeError):
         sub_user = 0
 
     sub_user = True if sub_user == 1 else False
@@ -239,11 +239,11 @@ def change_password_endpoint(request):
 
     if request.user.is_superuser:
         user.set_password(data['pwd1'])
-
-    if not request.user.is_superuser and authenticate(username=data['username'], password=data['old_pwd']):
-        user.set_password(data['pwd1'])
     else:
-        raise ParseError('old password is error!')
+        if authenticate(username=data['username'], password=data['old_pwd']):
+            user.set_password(data['pwd1'])
+        else:
+            raise ParseError('old password is error!')
 
     user.save()
 
@@ -266,7 +266,7 @@ def user_delete_endpoint(request):
 
     fields = (
         ('*username', str, verify_username),
-        ('*user_id', int, None)
+        ('*user_id', int, (verify_pk, User))
     )
     data = validate_post_data(request.body, fields)
 
@@ -275,7 +275,11 @@ def user_delete_endpoint(request):
     except User.DoesNotExist:
         raise NotFound(detail='not found this user')
 
-    if not request.user.is_superuser and u != request.user:
+    # 当前用户可以删除对应的子帐户
+    if not request.user.is_superuser and \
+            u != request.user and \
+            request.user.username != u.profile.parent_uid and \
+            request.user.username != u.profile.root_uid:
         raise NotAuthenticated(detail='permission denied')
 
     if u.username != data['username']:
@@ -309,6 +313,13 @@ def list_user_info_endpoint(request):
     :return:
     """
     username = request.GET.get('username', None)
+    subuser = request.GET.get('subuser', None)
+
+    try:
+        subuser = int(subuser)
+    except (ValueError, TypeError):
+        subuser = 0
+
     req_user = request.user
 
     users = User.objects. \
@@ -324,11 +335,18 @@ def list_user_info_endpoint(request):
                 Q(profile__parent_uid=username)
             )
         else:
-            user_list = users.all()
+            if subuser == 1:
+                user_list = users.filter(
+                    # Q(username=username) |
+                    Q(profile__parent_uid=request.user.username) |
+                    Q(profile__root_uid=request.user.username)
+                )
+            else:
+                user_list = users.all()
     else:
         username = req_user.username
         user_list = users.filter(
-            Q(username=username) |
+            # Q(username=username) |
             Q(profile__parent_uid=username) |
             Q(profile__root_uid=username)
         )
@@ -481,30 +499,24 @@ def query_user_usage(request):
     if u != req_user and not req_user.is_superuser:
         raise NotAuthenticated('permission denied!')
 
-    if not start_time or not check_date_format(start_time):
-        start_time = time.strftime(fmt, time.localtime(time.time() - 86400))
+    start_time_ts = date2timestamp(start_time)
+    end_time_ts = date2timestamp(end_time)
 
-    if not end_time or not check_date_format(end_time):
-        end_time = time.strftime(fmt, time.localtime())
+    if start_time_ts > end_time_ts or end_time_ts > time.time():
+        raise ParseError('end time illegal')
+
+    if end_time_ts-start_time_ts > 31*86400:
+        raise ParseError('start time to end time more than 31 days')
 
     usage_data = []
     reg = BucketRegion.objects.all()
-    all_region_usage = []
-    for i in reg:
-        rgw = rgw_client(i.reg_id)
-        try:
-            rgw.get_user(uid=req_user.keys.ceph_uid)
-        except (NoSuchUser, ConnectionError):
-            continue
 
-        # print(start_time, end_time, u.profile.ceph_uid)
-        def build_usage_data(origin_data):
-            if len(origin_data['entries']) == 0:
-                return []
-            buff = {}
-            for bucket in origin_data['entries'][0]['buckets']:
-                act_time = bucket['time'][:10]
-                buff[act_time] = {
+    def __build_fake_data(__start_time_ts, __end_time_ts):
+        temp = {}
+        while 1:
+            dt = time.strftime(fmt, time.localtime(__start_time_ts))
+            if dt not in temp:
+                temp[dt] = {
                     'get_obj': {
                         'successful_ops': 0,
                         'bytes_sent': 0,
@@ -514,55 +526,68 @@ def query_user_usage(request):
                         'bytes_received': 0,
                     },
                 }
-                for cate in bucket['categories']:
-                    if 'category' in cate and cate['category'] == 'put_obj':
-                        buff[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
-                        buff[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
-                    if 'category' in cate and cate['category'] == 'get_obj':
-                        buff[act_time]['get_obj']['successful_ops'] += cate['successful_ops']
-                        buff[act_time]['get_obj']['bytes_sent'] += cate['bytes_sent']
-            # s_key = sorted(buff)
-            # __data = []
-            # for k in s_key:
-            #     __tmp = {
-            #         'date': k
-            #     }
-            #     __tmp.update(buff[k])
-            #     __data.append(__tmp)
-            #     del __tmp
-            # return __data
-            return buff
+            __start_time_ts += 86400
+            if __start_time_ts > __end_time_ts:
+                break
+        return temp
+
+    def __update_fake_date(__fake_data, origin_data):
+        if len(origin_data['entries']) == 0:
+            return
+        # buff = {}
+        for bucket in origin_data['entries'][0]['buckets']:
+            act_time = bucket['time'][:10]
+            # buff[act_time] = {
+            #     'get_obj': {
+            #         'successful_ops': 0,
+            #         'bytes_sent': 0,
+            #     },
+            #     'put_obj': {
+            #         'successful_ops': 0,
+            #         'bytes_received': 0,
+            #     },
+            # }
+            for cate in bucket['categories']:
+                print(act_time, cate)
+                if 'category' in cate and cate['category'] == 'put_obj':
+                    __fake_data[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
+                    __fake_data[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
+                if 'category' in cate and cate['category'] == 'get_obj':
+                    __fake_data[act_time]['get_obj']['successful_ops'] += cate['successful_ops']
+                    __fake_data[act_time]['get_obj']['bytes_sent'] += cate['bytes_sent']
+        # s_key = sorted(buff)
+        # __data = []
+        # for k in s_key:
+        #     __tmp = {
+        #         'date': k
+        #     }
+        #     __tmp.update(buff[k])
+        #     __data.append(__tmp)
+        #     del __tmp
+        # return __data
+        # return __fake_data
+
+    fake_data = __build_fake_data(start_time_ts, end_time_ts)
+
+    for i in reg:
+        rgw = rgw_client(i.reg_id)
+        try:
+            rgw.get_user(uid=req_user.keys.ceph_uid)
+        except NoSuchUser:
+            continue
+        except ConnectionError:
+            raise ParseError('connection to rgw server is timeout!')
 
         data = rgw.get_usage(
             uid=u.keys.ceph_uid,
-            start=start_time,
-            end=end_time,
+            start=time.strftime(fmt, time.localtime(start_time_ts)),
+            end=time.strftime(fmt, time.localtime(end_time_ts)),
             show_summary=True,
             show_entries=True
         )
-        all_region_usage.append(build_usage_data(data))
-        # usage_data.append({
-        #     'region': i.name,
-        #     'usage_data': build_usage_data(data),
-            # 'summary': data['summary']
-        # })
+        __update_fake_date(fake_data, data)
 
-    tmp = {}
-    for i in all_region_usage:
-        if not i:
-            continue
-        # print(i)
-        for k, v in i.items():
-            if k not in tmp:
-                tmp[k] = v
-            else:
-                tmp[k]['get_obj']['successful_ops'] += v['successful_ops']
-                tmp[k]['get_obj']['bytes_sent'] += v['bytes_sent']
-
-                tmp[k]['put_obj']['successful_ops'] += v['successful_ops']
-                tmp[k]['put_obj']['bytes_sent'] += v['bytes_sent']
-
-    for k, v in tmp.items():
+    for k, v in fake_data.items():
         usage_data.append({
             'date': k,
             'usage': v
@@ -584,14 +609,15 @@ def get_license_info_endpoint(request):
     })
 
 
-def check_date_format(s: str) -> bool:
+def date2timestamp(s: str) -> int:
     try:
         fmt = '%Y-%m-%d'
-        time.strptime(s, fmt)
-    except ValueError:
-        return False
+        dt = time.strptime(s, fmt)
+        ts = time.mktime(dt)
+    except (ValueError, TypeError):
+        return int(time.time())
 
-    return True
+    return int(ts)
 
 
 def cache_request_user_meta_info(token_key, request):

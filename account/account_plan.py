@@ -30,11 +30,19 @@ class PlanEndpoint(APIView):
     ]
 
     def get(self, request):
-        self.queryset = Plan.objects.all().values()
+        plan_id = request.GET.get('id', None)
+        if plan_id:
+            try:
+                self.queryset = Plan.objects.filter(pk=plan_id)
+            except ValueError:
+                raise ParseError('id is not a number')
+        else:
+            self.queryset = Plan.objects.all()
+
         return Response({
             'code': 0,
             'msg': 'success',
-            'data': self.queryset
+            'data': self.queryset.values()
         })
 
     def post(self, request):

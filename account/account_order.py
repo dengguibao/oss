@@ -43,7 +43,7 @@ class OrderEndpoint(APIView):
             'msg': 'success',
             'data': ser.data,
             'page_info': {
-                'record_count': len(ser.data),
+                'record_count': len(data),
                 'page_size': size,
                 'current_page': page.page.number
             }

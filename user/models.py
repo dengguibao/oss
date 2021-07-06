@@ -102,12 +102,18 @@ class CapacityQuota(models.Model):
         return True
 
     def renewal(self, days: int, cap: int):
-        start_time = self.start_time if self.start_time else time.time()
-        new_start = start_time + (86400 * self.duration)
-        self.duration = days
+        # 原到期时间
+        old_end_time = self.start_time + (86400 * self.duration)
+        # 如果还未到期
+        if time.time() < old_end_time:
+            # 在原有时长上面加上新购时长
+            self.duration = self.duration + days
+        else:
+            # 如果已经到期
+            # 开始时间，为当前时间，到期时间为购买时间
+            self.start_time = time.time()
+            self.duration = self.duration
         self.capacity = cap
-        self.start_time = new_start
-        self.sync = 0
         self.save()
         return self.json
 
@@ -145,11 +151,19 @@ class BandwidthQuota(models.Model):
         return self.bandwidth
 
     def renewal(self, days: int, bandwidth: int):
-        start_time = self.start_time if self.start_time else time.time()
-        new_start = start_time + (86400 * self.duration)
-        self.duration = days
+        # 原到期时间
+        old_end_time = self.start_time + (86400 * self.duration)
+        # 如果还未到期
+        if time.time() < old_end_time:
+            # 在原有时长上面加上新购时长
+            self.duration = self.duration+days
+        else:
+            # 如果已经到期
+            # 开始时间，为当前时间，到期时间为购买时间
+            self.start_time = time.time()
+            self.duration = self.duration
         self.bandwidth = bandwidth
-        self.start_time = new_start
+
         self.save()
         return self.json
 
