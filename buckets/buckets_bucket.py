@@ -29,7 +29,7 @@ class BucketEndpoint(APIView):
         ('*name', str, verify_bucket_name),
         ('*bucket_region_id', int, (verify_pk, BucketRegion)),
         ('version_control', bool, verify_true_false),
-        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write'))),
+        ('*permission', str, (verify_in_array, ('private', 'public-read', 'public-read-write', 'authenticated'))),
     ]
 
     pk_field = [
@@ -105,7 +105,7 @@ class BucketEndpoint(APIView):
         s3 = s3_client(data['bucket_region_id'], request.user.username)
         s3.create_bucket(
             Bucket=data['name'],
-            ACL=data['permission'],
+            ACL='private' if data['permission'] == 'authenticated' else data['permission'],
         )
 
         if data['version_control']:

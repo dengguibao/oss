@@ -2,6 +2,7 @@ from rest_framework.serializers import ModelSerializer, SerializerMethodField
 from buckets.serializer import SimpleBucketSerialize
 from user.serializer import SimpleUserSerialize
 from .models import Objects
+import base64
 
 
 class ObjectsSerialize(ModelSerializer):
@@ -16,7 +17,8 @@ class ObjectsSerialize(ModelSerializer):
         return obj.root.replace('/', ',') if obj.root else None
 
     def get_key_url(self, obj):
-        return obj.key.replace('/', ',')
+        return base64.urlsafe_b64encode(obj.key.encode())
+        # return obj.key.replace('/', ',')
 
     def get_cn_type(self, obj):
         if obj.type == 'd':

@@ -22,6 +22,7 @@ from common.verify import verify_bucket_name, verify_object_name, verify_object_
 from objects.models import Objects, ObjectAcl
 from objects.serializer import ObjectsSerialize
 
+import base64
 
 class PermAction(Enum):
     RW = 'read-write'
@@ -349,9 +350,9 @@ def delete_object_endpoint(request):
     # 验证obj_id是否为非法id
     try:
         bucket_name = request.GET.get('bucket_name', '')
-        key = request.GET.get('key', '').replace(',', '/')
+        key = request.GET.get('key', '').encode()
         o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(
-            bucket__name=bucket_name, key=key
+            bucket__name=bucket_name, key=base64.urlsafe_b64decode(key).decode()
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
@@ -434,10 +435,9 @@ def download_object_endpoint(request):
     """
     try:
         bucket_name = request.GET.get('bucket_name', '')
-        key = request.GET.get('key', '').replace(',', '/')
-        print(bucket_name, key)
+        key = request.GET.get('key', '').encode()
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
-            bucket__name=bucket_name, key=key
+            bucket__name=bucket_name, key=base64.urlsafe_b64decode(key).decode()
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
