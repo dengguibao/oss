@@ -197,9 +197,9 @@ def verify_object_path(value: str) -> bool:
     验证对象路径是否为有合法
     """
     # 路径不能用/开头但是必须以/结尾
-    if not value.endswith('/') or value.startswith('/'):
-        return False
-    if not re.match('^[\u4e00-\u9fa5a-zA-Z0-9,\\-_/]{1,2048}/$', value):
+    # if not value.endswith('/') or value.startswith('/'):
+    #     return False
+    if not re.match('^[\u4e00-\u9fa5a-zA-Z0-9,\\-_/=]{1,2048}$', value):
         return False
     return True
 

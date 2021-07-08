@@ -29,6 +29,14 @@ class PermAction(Enum):
     R = 'read'
 
 
+def str2b64url(s: str)->str:
+    return base64.urlsafe_b64encode(s.encode()).decode()
+
+
+def b64url2str(s: str)->str:
+    return base64.urlsafe_b64decode(s.encode()).decode()
+
+
 def verify_bucket_owner_and_permission(request, perm: PermAction, b: Buckets = None, o: Objects = None):
     """
     验证文件对象是否有权限访问
@@ -104,7 +112,7 @@ def put_object_endpoint(request):
         raise ParseError(detail='some required field is mission')
 
     filename = file.name
-    for i in [',', '/', '\\', '|']:
+    for i in ['/', '\\', '|']:
         if i in filename:
             raise ParseError(detail='filename contains some special char')
 
@@ -128,7 +136,7 @@ def put_object_endpoint(request):
     # 验证路程是否为非常路径（目录）
     p = False
     if path:
-        path = path.replace(',', '/')
+        path = b64url2str(path)
         p = verify_path(path)
 
     if p and p.bucket.name != bucket_name:
@@ -208,9 +216,9 @@ def put_object_endpoint(request):
         }
         if b.version_control:
             o = Objects.objects.create(**record_data)
-            new = True
+            # new = True
         else:
-            o, new = Objects.objects.update_or_create(**record_data)
+            o, _ = Objects.objects.update_or_create(**record_data)
         o.permission = permission
         o.save()
 
@@ -221,12 +229,12 @@ def put_object_endpoint(request):
     except Exception as e:
         raise ParseError(detail=str(e))
 
-    ser = ObjectsSerialize(o)
+    # ser = ObjectsSerialize(o)
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': ser.data,
-        'new': new,
+        # 'data': ser.data,
+        # 'new': new,
     }, status=HTTP_201_CREATED)
 
 
@@ -247,6 +255,7 @@ def create_directory_endpoint(request):
     )
     # 检验字段
     data = validate_post_data(request.body, _fields)
+
     # 检验bucket name是否为非法
     try:
         b = Buckets.objects.select_related('bucket_region').get(name=data['bucket_name'])
@@ -261,7 +270,7 @@ def create_directory_endpoint(request):
     try:
         if 'path' in data:
             # 验证目录是否在正确的bucket下面
-            data['path'] = data['path'].replace(',', '/')
+            data['path'] = b64url2str(data['path'])
             p = verify_path(data['path'])
 
             if not p or p.owner != req_user or p.bucket.name != data['bucket_name']:
@@ -309,7 +318,8 @@ def list_objects_endpoint(request):
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
     if path:
-        res = res.filter(root=path.replace(',', '/'))
+        path = b64url2str(path)
+        res = res.filter(root=path)
     else:
         res = res.filter(Q(root=None) | Q(root=''))
 
@@ -327,11 +337,23 @@ def list_objects_endpoint(request):
     ret = page.paginate_queryset(res.order_by('type', '-obj_id'), request)
     ser = ObjectsSerialize(ret, many=True)
 
+    def gen_pre_path(old_path:str) -> str:
+        if not old_path:
+            return ''
+        else:
+            x = old_path.split('/')[:-2]
+            x = '/'.join(x)+'/' if x else None
+            if x:
+                return str2b64url(x)
+            return ''
+
     return Response({
         'code': 0,
         'msg': 'success',
         'data': ser.data,
         'page_info': {
+            'previous_path': gen_pre_path(path),
+            'current_path': str2b64url(path),
             'record_count': len(res),
             'pag_size': size,
             'current_page': cur_page,
@@ -350,9 +372,9 @@ def delete_object_endpoint(request):
     # 验证obj_id是否为非法id
     try:
         bucket_name = request.GET.get('bucket_name', '')
-        key = request.GET.get('key', '').encode()
+        key = request.GET.get('key', '')
         o = Objects.objects.select_related('bucket').select_related('bucket__bucket_region').get(
-            bucket__name=bucket_name, key=base64.urlsafe_b64decode(key).decode()
+            bucket__name=bucket_name, key=b64url2str(key)
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
@@ -435,9 +457,9 @@ def download_object_endpoint(request):
     """
     try:
         bucket_name = request.GET.get('bucket_name', '')
-        key = request.GET.get('key', '').encode()
+        key = request.GET.get('key', '')
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
-            bucket__name=bucket_name, key=base64.urlsafe_b64decode(key).decode()
+            bucket__name=bucket_name, key=b64url2str(key)
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
