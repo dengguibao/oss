@@ -6,6 +6,7 @@ from buckets.models import BucketRegion
 from common.func import validate_post_data
 from common.verify import verify_max_length, verify_pk, verify_in_array, verify_url
 
+import copy
 
 class BucketRegionEndpoint(APIView):
     permission_classes = (DjangoModelPermissions,)
@@ -42,8 +43,9 @@ class BucketRegionEndpoint(APIView):
         })
 
     def put(self, request):
-        self.fields.append(self.pk_field[0])
-        data = validate_post_data(request.body, tuple(self.fields))
+        fields = copy.deepcopy(self.fields)
+        fields.append(self.pk_field[0])
+        data = validate_post_data(request.body, tuple(fields))
         self.queryset = self.model.objects.filter(pk=data['reg_id'])
         self.queryset.update(**data)
         return Response({

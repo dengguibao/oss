@@ -46,7 +46,7 @@ class CapacityQuotaEndpoint(APIView):
                 total['capacity__sum'] > settings.LICENSE_INFO['max_capacity']:
             raise ParseError('license capacity not enough')
 
-        if self.queryset.valid() and data['capacity'] != self.queryset.capacity:
+        if data['capacity'] != self.queryset.capacity:
             raise ParseError('The original storage capacity does not match the new')
 
         total, offset_total = self.calculate_cost(
@@ -149,7 +149,7 @@ class BandwidthQuotaEndpoint(CapacityQuotaEndpoint):
 
         self.queryset = self.model.objects.get(user=request.user)
 
-        if data['bandwidth'] != self.queryset.bandwidth:
+        if self.queryset.valid() and data['bandwidth'] != self.queryset.bandwidth:
             raise ParseError('The original bandwidth does not match the new bandwidth')
 
         total, offset_total = self.calculate_cost(

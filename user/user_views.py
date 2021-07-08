@@ -8,7 +8,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from django.contrib.auth.models import User, AnonymousUser
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.contrib.auth import authenticate, login, logout
 from django.core.cache import cache
 
@@ -26,6 +26,8 @@ from common.func import rgw_client, get_client_ip, validate_post_data
 from .serializer import UserSerialize, UserDetailSerialize
 from .models import Profile, DefaultGroup
 from rgwadmin.exceptions import NoSuchUser
+from .models import CapacityQuota
+from objects.models import Objects
 
 import time
 
@@ -192,6 +194,7 @@ def user_login_endpoint(request):
             'token': tk.key,
             'user_id': user.pk,
             'username': user.username,
+            'first_name': user.first_name,
             'phone_verify': user.profile.phone_verify,
             'phone_number': user.profile.phone,
             'user_type': 'superuser' if user.is_superuser else 'normal',
@@ -471,6 +474,39 @@ def query_user_exist_endpoint(request):
         'code': 0,
         'msg': 'success',
         'exist': exist
+    })
+
+
+@api_view(("GET",))
+def query_cluster_usage_endpoint(request):
+    """
+    查询所有区域集群的使用情况
+    """
+    if not request.user.is_superuser:
+        raise PermissionError()
+
+    data = []
+    allocat_total = CapacityQuota.objects.aggregate(Sum('capacity'))
+    used_total = 0
+    for i in BucketRegion.objects.all():
+        all_bucket = Buckets.objects.filter(bucket_region=i).values_list('bucket_id', flat=True)
+        object_sum = Objects.objects.filter(bucket__bucket_id__in=all_bucket).aggregate(Sum('file_size'))
+        object_sum = object_sum['file_size__sum'] if object_sum['file_size__sum'] else 0
+
+        data.append({
+            'region_name': i.name,
+            'bucket_total': len(all_bucket),
+            'file_size_total': round(object_sum/1024**3, 2)
+        })
+        used_total += object_sum
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'data': data,
+        'license_capacity': settings.LICENSE_INFO['max_capacity'],
+        'allocate_total': allocat_total['capacity__sum'],
+        'used_total': round(used_total/1024**3, 2),
     })
 
 

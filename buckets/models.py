@@ -50,7 +50,7 @@ class Buckets(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user', null=True, blank=True)
     version_control = models.BooleanField(verbose_name="version control", default=False, blank=False)
     permission = models.CharField(max_length=50, blank=False, default='private')
-    bucket_region = models.ForeignKey(BucketRegion, on_delete=models.SET_NULL, null=True, blank=True)
+    bucket_region = models.ForeignKey(BucketRegion, on_delete=models.CASCADE, null=True, blank=True)
     state = models.CharField(choices=STATE, verbose_name='state', max_length=1, blank=False, default='e')
     #
     backup = models.BooleanField(verbose_name="backup flag", default=False)

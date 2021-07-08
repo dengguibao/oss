@@ -435,6 +435,7 @@ def download_object_endpoint(request):
     try:
         bucket_name = request.GET.get('bucket_name', '')
         key = request.GET.get('key', '').replace(',', '/')
+        print(bucket_name, key)
         obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
             bucket__name=bucket_name, key=key
         )

@@ -7,6 +7,8 @@ from rest_framework.permissions import DjangoModelPermissions
 
 from common.verify import verify_max_length, verify_max_value, verify_in_array, verify_pk
 from .models import Plan
+
+import copy
 # Create your views here.
 
 
@@ -19,7 +21,7 @@ class PlanEndpoint(APIView):
         ('*name', str, (verify_max_length, 20)),
         ('*s_price', float, (verify_max_value, 1000)),
         ('*b_price', float, (verify_max_value, 1000)),
-        ('*state', str, (verify_in_array, ('e', 'e'))),
+        ('*state', str, (verify_in_array, ('e', 'd'))),
         ('*offset', float, (verify_max_value, 2.0)),
         ('*plan_min_days', int, (verify_max_value, 365 * 6)),
         ('*offset_min_days', int, (verify_max_value, 365 * 6))
@@ -48,6 +50,7 @@ class PlanEndpoint(APIView):
     def post(self, request):
         # if not verify_super_user(request):
         #     raise PermissionDenied()
+        print(self.model_fields)
 
         data = validate_post_data(request.body, tuple(self.model_fields))
 
@@ -62,7 +65,7 @@ class PlanEndpoint(APIView):
         # if not verify_super_user(request):
         #     raise PermissionDenied()
 
-        fields = self.model_fields
+        fields = copy.deepcopy(self.model_fields)
         fields.append(self.model_pk[0])
         data = validate_post_data(request.body, tuple(fields))
 

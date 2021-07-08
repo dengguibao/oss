@@ -9,6 +9,7 @@ from .user_views import (
     query_user_exist_endpoint,
     query_user_usage,
     get_license_info_endpoint,
+    query_cluster_usage_endpoint,
 )
 from .user_account import user_recharge_endpoint
 from .user_quota import CapacityQuotaEndpoint, BandwidthQuotaEndpoint
@@ -34,6 +35,7 @@ urlpatterns = [
     path('user/account/recharge', user_recharge_endpoint),
     path('user/query_exist', query_user_exist_endpoint),
     path('user/usage', query_user_usage),
+    path('user/cluster_usage', query_cluster_usage_endpoint),
 
     path('user/quota/storage', CapacityQuotaEndpoint.as_view()),
     path('user/quota/bandwidth', BandwidthQuotaEndpoint.as_view()),
