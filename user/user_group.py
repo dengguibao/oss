@@ -10,82 +10,161 @@ from rest_framework.permissions import DjangoModelPermissions
 from common.verify import verify_max_length, verify_in_array, verify_pk
 from common.func import verify_super_user, validate_post_data
 
-all_perms = {
-    "auth.view_user": "查看用户详情及用量",
-    "auth.change_user": "修改密码",
-    "auth.delete_user": "删除用户",
-    "auth.add_user": "用户登陆",
+all_perms = [
+    {
+        'title': 'User',
+        'key': '0-0',
+        'children': [
+            {
+                'title': "查看用户详情及用量",
+                'key': "auth.view_user"
+            },
+            {
+                'title': "修改密码",
+                'key': "auth.change_user"
+            },
+            {
+                'title': "删除用户",
+                'key': "auth.delete_user"
+            },
+            {
+                'title': "更换key与设置使用白名单",
+                'key': "user.change_keys"
+            }
+        ]
+    },
+    {
+        'title': 'Quota',
+        'key': '0-1',
+        'children': [
+            {
+                'title': "购买存储容量",
+                'key': "user.add_capacityquota"
+            },
+            {
+                'title': "续费存储容量",
+                'key': "user.change_capacityquota"
 
-    "auth.add_group": "新建角色",
-    "auth.delete_group": "删除角色",
-    "auth.view_group": "查看角色以及对应的用户与权限",
+            },
+            {
+                'title': "购买下载带宽",
+                'key': "user.add_bandwidthquota"
 
-    "user.add_capacityquota": "购买存储容量",
-    "user.change_capacityquota": "续费存储容量",
+            },
+            {
+                'title': "续费下载带宽",
+                'key': "user.change_bandwidthquota"
+            }
+        ]
+    },
+    {
+        'title': 'Bucket',
+        'key': '0-2',
+        'children': [
+            {
+                'title': "创建bucket",
+                'key': "buckets.add_buckets"
+            },
+            {
+                'title': "删除bucket",
+                'key': "buckets.delete_buckets"
+            },
+            {
+                'title': "bucket备份与权限修改",
+                'key': "buckets.change_buckets"
+            },
+            {
+                'title': "添加bucket授权",
+                'key': "buckets.add_bucketacl"
+            },
+            {
+                'title': "删除bucket授权",
+                'key': "buckets.delete_bucketacl"
+            },
+        ]
+    },
+    {
+        'title': 'Object',
+        'key': '0-3',
+        'children': [
+            {
+                'title': "设置文件对象的访问权限",
+                'key': "objects.change_objects"
+            },
+            {
+                'title': "查看文件对象的访问权限",
+                'key': "objects.view_objects"
+            },
+            {
+                'title': "设置文件对象授权",
+                'key': "objects.add_objectacl"
+            },
+            {
+                'title': "删除对文件对象的授权",
+                'key': "objects.delete_objectacl"
+            },
+        ]
+    },
+    {
+        'title': 'Region',
+        'key': '0-4',
+        'children': [
+            {
+                'title': "新增存储区域",
+                'key': "buckets.add_bucketregion"
+            },
+            {
+                'title': "修改存储区域",
+                'key': "buckets.change_bucketregion"
+            },
+            {
+                'title': "删除存储区域",
+                'key': "buckets.delete_bucketregion"
+            }
+        ]
+    },
+    {
+        'title': 'Plan',
+        'key': '0-5',
+        'children': [
+            {
+                'title': "新增套餐与定价",
+                'key': "account.add_plan"
+            },
+            {
+                'title': "修改套餐与定价",
+                'key': "account.change_plan"
+            },
+            {
+                'title': "删除套餐与定价",
+                'key': "account.delete_plan"
+            },
 
-    "user.change_keys": "更换key与设置使用白名单",
-
-    "buckets.add_bucketregion": "新增存储区域",
-    "buckets.change_bucketregion": "修改存储区域",
-    "buckets.view_bucketregion": "查看存储区域",
-    "buckets.delete_bucketregion": "删除存储区域",
-
-    "buckets.view_buckets": "查询与列出bucket",
-    "buckets.add_buckets": "新增bucket",
-    "buckets.delete_buckets": "删除bucket",
-    "buckets.change_buckets": "修改bucket读写权限",
-
-    "buckets.add_bucketacl": "添加bucket授权",
-    "buckets.view_bucketacl": "查看bucket授权",
-    "buckets.delete_bucketacl": "删除bucket授权",
-
-    "objects.change_objects": "设置文件对象的访问权限",
-    # "objects.delete_objects": "删除文件",
-    "objects.view_objects": "列出文件对象的访问权限",
-    # "objects.add_objects": "新建文件夹",
-
-    "objects.add_objectacl": "设置文件对象授权",
-    "objects.delete_objectacl": "删除文件对象授权",
-    "objects.view_objectacl": "列出文件对象授权",
-
-    "account.add_plan": "新增资费套餐",
-    "account.change_plan": "修改资费套餐",
-    "account.delete_plan": "删除资费套餐",
-}
+        ]
+    },
+]
 
 
 def build_cn_permission_list(user_perms, _type: str = 'long'):
     data = []
-    for i in user_perms:
-        if _type == 'short':
-            for k, v in all_perms.items():
-                if i in k:
+    for i in all_perms:
+        for c in i['children']:
+            title, key = c.values()
+            for p in user_perms:
+                if p in key:
                     data.append({
-                        'key': k,
-                        'label': v
+                            'key': key,
+                            'label': title
                     })
-
-        if _type == 'long':
-            if i in all_perms:
-                data.append({
-                    'key': i,
-                    'label': all_perms[i]
-                })
     return data
 
 
 @api_view(('GET',))
 def list_all_available_perms_endpoint(request):
-    data = []
-    for k, v in all_perms.items():
-        data.append({
-            'key': k,
-            'label': v
-        })
     return Response({
         'code': 0,
         'msg': 'success',
-        'data': data
+        'data': all_perms
     })
 
 
@@ -107,7 +186,6 @@ def set_default_user_role(request):
 
 
 class GroupEndpoint(APIView):
-
     queryset = Group.objects.none()
 
     def get(self, request):

@@ -24,6 +24,7 @@ from objects.serializer import ObjectsSerialize
 
 import base64
 
+
 class PermAction(Enum):
     RW = 'read-write'
     R = 'read'
@@ -463,6 +464,8 @@ def download_object_endpoint(request):
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
+    except Objects.MultipleObjectsReturned:
+        raise ParseError('The key found multi object')
 
     if obj.type == 'd':
         raise ParseError('download object is a directory')
@@ -487,11 +490,14 @@ def download_object_endpoint(request):
 
             while 1:
                 # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
-                ret_data = s3.get_object(
-                    Bucket=obj.bucket.name,
-                    Key=obj.key,
-                    Range='bytes=%s-%s' % (n, n+min_unit-1),
-                )
+                try:
+                    ret_data = s3.get_object(
+                        Bucket=obj.bucket.name,
+                        Key=obj.key,
+                        Range='bytes=%s-%s' % (n, n+min_unit-1),
+                    )
+                except:
+                    raise ParseError('not found this object on the backend storage server')
                 n += min_unit
                 data = ret_data['Body'].read()
                 transfer_count += min_unit
