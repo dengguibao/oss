@@ -410,9 +410,12 @@ def get_user_detail_endpoint(request):
             u.profile.root_uid != request.user.username:
         raise NotAuthenticated()
 
+    user_used = Objects.objects.filter(owner=u).aggregate(Sum('file_size'))
+
     ser = UserDetailSerialize(u)
     ser_data = ser.data
     ser_data['bucket'] = [i['name'] for i in b]
+    ser_data['user_used'] = user_used['file_size__sum']
     # ser_data['objects'] = {
     #     'count': Objects.objects.filter(owner=request.user, type='f').count()
     # }
@@ -584,7 +587,7 @@ def query_user_usage(request):
             #     },
             # }
             for cate in bucket['categories']:
-                print(act_time, cate)
+                # print(act_time, cate)
                 if 'category' in cate and cate['category'] == 'put_obj':
                     __fake_data[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
                     __fake_data[act_time]['put_obj']['bytes_received'] += cate['bytes_received']

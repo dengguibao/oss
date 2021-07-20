@@ -6,9 +6,12 @@ from rest_framework.exceptions import ParseError, NotFound
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from common.func import send_phone_verify_code
+from common.func import send_phone_verify_code, validate_post_data
 from common.captcha import Captcha
 from user.models import Profile
+
+from io import BytesIO
+import qrcode
 
 
 @api_view(('GET',))
@@ -51,3 +54,26 @@ def build_image_verify_code_endpoint(request):
     txt, img = captcha.generate_captcha()
     cache.set('img_verify_code_%s' % txt, True, 180)
     return HttpResponse(img, content_type="image/png")
+
+
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+def build_qrcode(request):
+    fields = (
+        ('*content', str, len),
+    )
+    print(request.body)
+    data = validate_post_data(request.body, fields)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(data['content'])
+    qr.make(fit=True)
+
+    img_io = BytesIO()
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(img_io)
+    return HttpResponse(img_io.getvalue(), content_type="image/png")
