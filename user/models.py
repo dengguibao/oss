@@ -79,7 +79,7 @@ class Keys(models.Model):
 class CapacityQuota(models.Model):
     c_id = models.AutoField(primary_key=True, auto_created=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='capacity_quota')
-    start_time = models.IntegerField(verbose_name="start time", default=int(time.time()), blank=False)
+    start_time = models.IntegerField(verbose_name="start time", default=0, blank=False)
     capacity = models.IntegerField(verbose_name="capacity", default=0, blank=False)
     duration = models.IntegerField(verbose_name="duration", default=0, blank=False)
     # 后端服务器已同步标志，如果已经同步，则该标志为0, 1表示为ceph后端还未同步
@@ -133,7 +133,7 @@ class CapacityQuota(models.Model):
 class BandwidthQuota(models.Model):
     b_id = models.AutoField(primary_key=True, auto_created=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='bandwidth_quota')
-    start_time = models.IntegerField(verbose_name="start time", default=int(time.time()), blank=False)
+    start_time = models.IntegerField(verbose_name="start time", default=0, blank=False)
     bandwidth = models.IntegerField(verbose_name="bandwidth", default=settings.USER_MIN_BANDWIDTH, blank=False)
     duration = models.IntegerField(verbose_name="duration", default=0, blank=False)
     create_time = models.DateTimeField(auto_now=True)

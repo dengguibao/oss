@@ -14,10 +14,12 @@ from rest_framework.permissions import DjangoModelPermissions
 from rgwadmin.exceptions import NoSuchKey, NoSuchBucket
 
 from buckets.models import BucketRegion, BucketAcl, Buckets
+from objects.models import Objects
 from buckets.serializer import BucketSerialize
 from common.func import validate_post_data, s3_client, rgw_client
 from common.tokenauth import verify_permission
 from common.verify import verify_pk, verify_in_array, verify_true_false, verify_bucket_name
+from botocore.exceptions import ClientError
 
 
 class BucketEndpoint(APIView):
@@ -103,10 +105,20 @@ class BucketEndpoint(APIView):
 
         # 使用用户key创建bucket
         s3 = s3_client(data['bucket_region_id'], request.user.username)
-        s3.create_bucket(
-            Bucket=data['name'],
-            ACL='private' if data['permission'] == 'authenticated' else data['permission'],
-        )
+        try:
+            kwarg = {
+                'Bucket': data['name'],
+                # 'Acl': 'private' if data['permission'] == 'authenticated' else data['permission'],
+            }
+            if bucket_region.type == 'amazon':
+                kwarg['CreateBucketConfiguration'] = {
+                    'LocationConstraint': bucket_region.server.split('.')[1]
+                }
+            s3.create_bucket(
+               **kwarg
+            )
+        except ClientError as e:
+            raise ParseError(e.args[0])
 
         if data['version_control']:
             s3.put_bucket_versioning(
@@ -141,15 +153,18 @@ class BucketEndpoint(APIView):
             self.model.objects.filter(pk=bucket.pid).update(backup=False)
         try:
             # ceph集群删除bucket
-            print(bucket.name)
-            rgw = rgw_client(bucket.bucket_region.reg_id)
-            rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
+            # print(bucket.name)
+            if bucket.bucket_region.type == 'local':
+                rgw = rgw_client(bucket.bucket_region.reg_id)
+                rgw.remove_bucket(bucket=bucket.name, purge_objects=True)
+            if bucket.bucket_region.type == 'amazon':
+                self.delete_all_file_by_bucket(bucket)
             # 删除数据记录
             bucket.delete()
         except NoSuchKey:
-            print(bucket.name)
-            rgw.remove_bucket(bucket=bucket.name)
-            # raise ParseError('delete bucket failed, purge objects not found any key')
+            # print(bucket.name)
+            # rgw.remove_bucket(bucket=bucket.name)
+            raise ParseError('delete bucket failed, purge objects not found any key')
 
         except NoSuchBucket:
             raise ParseError('delete bucket failed, not found this bucket')
@@ -189,6 +204,20 @@ class BucketEndpoint(APIView):
             'msg': 'success'
         })
 
+    @staticmethod
+    def delete_all_file_by_bucket(bucket: Buckets):
+        try:
+            s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+            for i in Objects.objects.filter(bucket=bucket.bucket_id):
+                s3.delete_object(
+                    Bucket=bucket.name,
+                    Key=i.key
+                )
+            s3.delete_bucket(Bucket=bucket.name)
+        except ClientError:
+            return False
+        return True
+
 
 @api_view(('GET',))
 @verify_permission(model_name='objects')
@@ -221,6 +250,9 @@ def get_bucket_detail_endpoint(request):
     if b.user != req_user or not req_user.is_superuser:
         raise ParseError(detail='this bucket is not own you')
 
+    if b.bucket_region.type != 'local':
+        raise ParseError('not local region can\'t view bucket detail!')
+
     try:
         rgw = rgw_client(b.bucket_region.reg_id)
         data = rgw.get_bucket(bucket=bucket_name)
@@ -248,22 +280,31 @@ def query_bucket_exist(name):
 
 @receiver(post_save, sender=Buckets)
 def handler_ceph(sender, instance, created, **kwargs):
-    s3 = s3_client(instance.bucket_region_id, instance.user.username)
-    if created and '-backup' in instance.name:
-        s3.create_bucket(
-            Bucket=instance.name,
-        )
-    if instance.permission in ('private', 'public-read-write', 'public-read'):
-        s3.put_bucket_acl(
-            Bucket=instance.name,
-            ACL=instance.permission,
-        )
+    try:
+        s3 = s3_client(instance.bucket_region_id, instance.user.username)
+        if created and '-backup' in instance.name:
+            kwarg = {
+                'Bucket': instance.name,
+                # 'Acl': 'private' if data['permission'] == 'authenticated' else data['permission'],
+            }
+            if instance.bucket_region.type == 'amazon':
+                kwarg['CreateBucketConfiguration'] = {
+                    'LocationConstraint': instance.bucket_region.server.split('.')[1]
+                }
+            s3.create_bucket(**kwarg)
+    except ClientError:
+        instance.delete()
+    # if instance.permission in ('private', 'public-read-write', 'public-read'):
+    #     s3.put_bucket_acl(
+    #         Bucket=instance.name,
+    #         ACL=instance.permission,
+    #     )
 
-    if instance.version_control:
-        s3.put_bucket_versioning(
-            Bucket=instance.name,
-            VersioningConfiguration={
-                'MFADelete': 'Disabled',
-                'Status': 'Enabled',
-            },
-        )
+    # if instance.version_control:
+    #     s3.put_bucket_versioning(
+    #         Bucket=instance.name,
+    #         VersioningConfiguration={
+    #             'MFADelete': 'Disabled',
+    #             'Status': 'Enabled',
+    #         },
+    #     )

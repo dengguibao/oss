@@ -33,14 +33,14 @@ def file_iter(filename):
     os.remove(filename)
 
 
-def verify_path(path):
+def verify_path(path: str, bucket_name: str):
     """
     查询用户post过来的路径是否为真实有效已存在的路径
     """
     if not path or path.startswith('/') and not path.endswith('/'):
         return False
     try:
-        obj = Objects.objects.select_related("bucket").get(key=path, type='d')
+        obj = Objects.objects.select_related("bucket").get(key=path, type='d', bucket__name=bucket_name)
     except Objects.DoesNotExist:
         return False
     else:
@@ -84,52 +84,68 @@ def s3_client(reg_id: int, username: str):
     如果用户存在则使用用户的key创建s3客户端
     如果不存在则创建该用户，使用指定的key，然后再初始化s3客户端
     """
-    u = User.objects.select_related('profile').\
-        select_related('capacity_quota').\
+    region = BucketRegion.objects.get(reg_id=reg_id)
+    u = User.objects.select_related('profile'). \
+        select_related('capacity_quota'). \
         select_related('keys').get(username=username)
     if not u.profile.phone_verify:
         return
-    region = BucketRegion.objects.get(reg_id=reg_id)
-    rgw = rgw_client(reg_id)
 
-    try:
-        ceph_user = rgw.get_user(uid=u.keys.ceph_uid)
-    except NoSuchUser:
-        ceph_user = rgw.create_user(
-            uid=u.keys.ceph_uid,
-            access_key=u.keys.ceph_access_key,
-            secret_key=u.keys.ceph_secret_key,
-            display_name=u.first_name,
-            max_buckets=200,
-            user_caps='buckets=read,write;user=read,write;usage=read'
+    if region.type == 'local':
+        rgw = rgw_client(reg_id)
+
+        try:
+            ceph_user = rgw.get_user(uid=u.keys.ceph_uid)
+        except NoSuchUser:
+            ceph_user = rgw.create_user(
+                uid=u.keys.ceph_uid,
+                access_key=u.keys.ceph_access_key,
+                secret_key=u.keys.ceph_secret_key,
+                display_name=u.first_name,
+                max_buckets=200,
+                user_caps='buckets=read,write;user=read,write;usage=read'
+            )
+        except requests.exceptions.ConnectionError:
+            msg = 'connection to server %s timeout' % region.server
+            settings.LOGGER.error(msg)
+            raise ParseError(msg)
+
+        assert ceph_user, ParseError("ceph create user failed")
+
+        user_quota = ceph_user['user_quota']
+        if user_quota['enabled'] is not True or user_quota['max_size_kb'] != u.capacity_quota.capacity*1024**2:
+            rgw.set_user_quota(
+                uid=u.keys.ceph_uid,
+                max_size_kb=u.capacity_quota.capacity*1024**2,
+                enabled=True,
+                quota_type='user'
+            )
+            u.capacity_quota.ceph_sync()
+
+        conn = Session(
+            aws_access_key_id=u.keys.ceph_access_key,
+            aws_secret_access_key=u.keys.ceph_secret_key
         )
-    except requests.exceptions.ConnectionError:
-        msg = 'connection to server %s timeout' % region.server
-        settings.LOGGER.error(msg)
-        raise ParseError(msg)
 
-    assert ceph_user, ParseError("ceph create user failed")
-
-    user_quota = ceph_user['user_quota']
-    if user_quota['enabled'] is not True or user_quota['max_size_kb'] != u.capacity_quota.capacity*1024**2:
-        rgw.set_user_quota(
-            uid=u.keys.ceph_uid,
-            max_size_kb=u.capacity_quota.capacity*1024**2,
-            enabled=True,
-            quota_type='user'
+        client = conn.client(
+            service_name='s3',
+            endpoint_url=region.server,
+            verify=False
         )
-        u.capacity_quota.ceph_sync()
+        return client
 
-    conn = Session(
-        aws_access_key_id=u.keys.ceph_access_key,
-        aws_secret_access_key=u.keys.ceph_secret_key
-    )
-    client = conn.client(
-        service_name='s3',
-        endpoint_url=region.server,
-        verify=False
-    )
-    return client
+    if region.type == 'amazon':
+        conn = Session(
+            aws_access_key_id=region.access_key,
+            aws_secret_access_key=region.secret_key
+        )
+
+        client = conn.client(
+            service_name='s3',
+            endpoint_url=region.server,
+            verify=False
+        )
+        return client
 
 
 def build_ceph_userinfo() -> tuple:

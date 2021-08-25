@@ -8,16 +8,18 @@ from common.verify import verify_max_length, verify_pk, verify_in_array, verify_
 
 import copy
 
+
 class BucketRegionEndpoint(APIView):
     permission_classes = (DjangoModelPermissions,)
     model = BucketRegion
     queryset = model.objects.none()
 
     fields = [
-        ('*name', str, (verify_max_length, 20)),
+        ('*name', str, (verify_max_length, 40)),
         ('*secret_key', str, (verify_max_length, 50)),
         ('*access_key', str, (verify_max_length, 32)),
         ('*server', str, verify_url),
+        ('*type', str, (verify_max_length, 10)),
         ('*state', str, (verify_in_array, ('e', 'd', 's')))
     ]
     pk_field = (

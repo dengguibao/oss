@@ -43,7 +43,7 @@ class Objects(models.Model):
 
     class Meta:
         unique_together = (
-            'bucket', 'owner', 'key', 'version_id'
+            'bucket', 'key'
         )
 
 

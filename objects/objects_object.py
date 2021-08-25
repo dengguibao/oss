@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
+from django.db.utils import IntegrityError
 from django.http import StreamingHttpResponse
 
 from rest_framework.response import Response
@@ -30,11 +31,11 @@ class PermAction(Enum):
     R = 'read'
 
 
-def str2b64url(s: str)->str:
+def str2b64url(s: str) -> str:
     return base64.urlsafe_b64encode(s.encode()).decode()
 
 
-def b64url2str(s: str)->str:
+def b64url2str(s: str) -> str:
     return base64.urlsafe_b64decode(s.encode()).decode()
 
 
@@ -138,9 +139,9 @@ def put_object_endpoint(request):
     p = False
     if path:
         path = b64url2str(path)
-        p = verify_path(path)
+        p = verify_path(path, bucket_name)
 
-    if p and p.bucket.name != bucket_name:
+    if not p:
         raise ParseError(detail='illegal path')
 
     # 验证文件名是否超长
@@ -173,7 +174,7 @@ def put_object_endpoint(request):
         uploader = s3.create_multipart_upload(
             Bucket=b.name,
             Key=file_key,
-            ACL=permission if permission.startswith('public-read') else 'private'
+            # ACL=permission if permission.startswith('public-read') else 'private'
         )
 
         n = 1
@@ -272,7 +273,7 @@ def create_directory_endpoint(request):
         if 'path' in data:
             # 验证目录是否在正确的bucket下面
             data['path'] = b64url2str(data['path'])
-            p = verify_path(data['path'])
+            p = verify_path(data['path'], data['bucket_name'])
 
             if not p or p.owner != req_user or p.bucket.name != data['bucket_name']:
                 raise ParseError(detail='illegal path')
@@ -289,10 +290,11 @@ def create_directory_endpoint(request):
             'root': data['path'] if 'path' in data else None,
             'owner': b.user if b.permission == 'public-read-write' else req_user
         }
-        Objects.objects.create(**record_data)
+        o = Objects.objects.create(**record_data)
+        backup_object(o)
 
-    except Exception as e:
-        raise ParseError(detail=str(e))
+    except IntegrityError as e:
+        raise ParseError(e)
 
     return Response({
         'code': 0,
@@ -424,16 +426,15 @@ def delete_object_endpoint(request):
     s3 = s3_client(o.bucket.bucket_region_id, o.bucket.user.username)
 
     if o.bucket.backup:
-        backup_bucket = Buckets.objects.get(pid=o.bucket_id)
-        backup_s3 = s3_client(backup_bucket.bucket_region_id, backup_bucket.user.username)
+        backup_bucket = Buckets.objects.select_related('bucket_region').get(pid=o.bucket_id)
+        backup_s3 = s3_client(backup_bucket.bucket_region.reg_id, backup_bucket.user.username)
 
     def remove_backup(object_key: str):
-        if 'backup_s3' in dir():
-            backup_s3.delete_object(
-                Bucket=backup_bucket.name,
-                Key=key
-            )
-            Objects.objects.filter(bucket=backup_bucket, key=object_key).delete()
+        backup_s3.delete_object(
+            Bucket=backup_bucket.name,
+            Key=object_key
+        )
+        Objects.objects.filter(bucket=backup_bucket, key=object_key).delete()
 
     for del_id, del_key in delete_list:
         s3.delete_object(
@@ -441,7 +442,11 @@ def delete_object_endpoint(request):
             Key=del_key
         )
         Objects.objects.get(obj_id=del_id).delete()
-        threading.Thread(target=remove_backup, args=(del_key,)).start()
+        if 'backup_s3' in dir():
+            threading.Thread(target=remove_backup, args=(del_key,)).start()
+        # t = threading.Thread(target=remove_backup, args=(del_key,))
+        # t.setDaemon(True)
+        # t.start()
 
     return Response({
         'code': 0,
@@ -523,68 +528,72 @@ def download_object_endpoint(request):
 
 
 def backup_object(origin: Objects):
-    origin_client = s3_client(origin.bucket.bucket_region.reg_id, origin.owner.username)
+    dest_bucket = Buckets.objects.select_related('bucket_region').select_related('user').get(pid=origin.bucket_id)
+    if origin.type == 'd':
+        origin.pk = None
+        origin.bucket = dest_bucket
+        origin.save()
+    if origin.type == 'f':
+        origin_client = s3_client(origin.bucket.bucket_region.reg_id, origin.owner.username)
+        dest_client = s3_client(dest_bucket.bucket_region_id, dest_bucket.user.username)
 
-    dest_bucket = Buckets.objects.get(pid=origin.bucket_id)
-    dest_client = s3_client(dest_bucket.bucket_region_id, dest_bucket.user.username)
-
-    uploader = dest_client.create_multipart_upload(
-        Bucket=dest_bucket.name,
-        Key=origin.key,
-        ACL=origin.permission if origin.permission.startswith('public-read') else 'private'
-    )
-
-    n = 0
-    min_unit = 5 * 1024 ** 2
-    item = 1
-    parts = []
-    while 1:
-        # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
-        ret_data = origin_client.get_object(
-            Bucket=origin.bucket.name,
-            Key=origin.key,
-            Range='bytes=%s-%s' % (n, n + min_unit - 1),
-        )
-        n += min_unit
-        bin_data = ret_data['Body'].read()
-        part = dest_client.upload_part(
-            Body=bin_data,
+        uploader = dest_client.create_multipart_upload(
             Bucket=dest_bucket.name,
-            ContentLength=len(bin_data),
+            Key=origin.key,
+            # ACL=origin.permission if origin.permission.startswith('public-read') else 'private'
+        )
+
+        n = 0
+        min_unit = 5 * 1024 ** 2
+        item = 1
+        parts = []
+        while 1:
+            # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
+            ret_data = origin_client.get_object(
+                Bucket=origin.bucket.name,
+                Key=origin.key,
+                Range='bytes=%s-%s' % (n, n + min_unit - 1),
+            )
+            n += min_unit
+            bin_data = ret_data['Body'].read()
+            part = dest_client.upload_part(
+                Body=bin_data,
+                Bucket=dest_bucket.name,
+                ContentLength=len(bin_data),
+                Key=origin.key,
+                UploadId=uploader['UploadId'],
+                PartNumber=item
+            )
+            parts.append({
+                'ETag': part['ETag'].replace('"', ''),
+                'PartNumber': item
+            })
+
+            if n > origin.file_size:
+                break
+
+        completed = dest_client.complete_multipart_upload(
+            Bucket=dest_bucket.name,
             Key=origin.key,
             UploadId=uploader['UploadId'],
-            PartNumber=item
+            MultipartUpload={'Parts': parts}
         )
-        parts.append({
-            'ETag': part['ETag'].replace('"', ''),
-            'PartNumber': item
-        })
+        record_data = {
+            'name': origin.name,
+            'bucket_id': dest_bucket.bucket_id,
+            'type': 'f',
+            'root': origin.root,
+            'file_size': origin.file_size,
+            'key': origin.key,
+            'md5': origin.md5,
+            'etag': completed['ETag'] if 'ETag' in completed else None,
+            'version_id': completed['VersionId'] if 'VersionId' in completed else None,
+            'owner_id': origin.owner_id,
+        }
+        if origin.bucket.version_control:
+            result = Objects.objects.create(**record_data)
+        else:
+            result, created = Objects.objects.update_or_create(**record_data)
 
-        if n > origin.file_size:
-            break
-
-    completed = dest_client.complete_multipart_upload(
-        Bucket=dest_bucket.name,
-        Key=origin.key,
-        UploadId=uploader['UploadId'],
-        MultipartUpload={'Parts': parts}
-    )
-    record_data = {
-        'name': origin.name,
-        'bucket_id': dest_bucket.bucket_id,
-        'type': 'f',
-        'root': origin.root,
-        'file_size': origin.file_size,
-        'key': origin.key,
-        'md5': origin.md5,
-        'etag': completed['ETag'] if 'ETag' in completed else None,
-        'version_id': completed['VersionId'] if 'VersionId' in completed else None,
-        'owner_id': origin.owner_id,
-    }
-    if origin.bucket.version_control:
-        result = Objects.objects.create(**record_data)
-    else:
-        result, created = Objects.objects.update_or_create(**record_data)
-
-    result.permission = origin.permission
-    result.save()
+        result.permission = origin.permission
+        result.save()

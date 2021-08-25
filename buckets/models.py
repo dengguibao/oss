@@ -14,6 +14,7 @@ class BucketRegion(models.Model):
     secret_key = models.CharField(verbose_name='secret key', max_length=50)
     access_key = models.CharField(verbose_name='access key', max_length=50)
     server = models.CharField(verbose_name='server ip', max_length=20)
+    type = models.CharField(verbose_name='region type', max_length=20, default='local')
     state = models.CharField(verbose_name='region state', max_length=1, default='e', choices=STATE)
     create_time = models.DateTimeField(auto_now=True)
 
@@ -28,7 +29,8 @@ class BucketRegion(models.Model):
             'secret_key': self.secret_key,
             'access_key': self.access_key,
             'server': self.server,
-            'state': 'enable' if self.state == 'e' else 'disabled'
+            'type': self.type,
+            'state': self.state,
         }
 
 
