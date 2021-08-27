@@ -125,9 +125,10 @@ def get_db_config() -> dict:
 
 def write_clock() -> None:
     now = int(time.time())
+    clock_file = os.path.dirname(__file__)+'/clock.dat'
     while True:
         lock.acquire()
-        with open('./oss/clock.dat', 'wb') as fp:
+        with open(clock_file, 'wb+') as fp:
             fp.write(str(now).encode())
         lock.release()
         now += 1
