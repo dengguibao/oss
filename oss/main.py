@@ -18,7 +18,7 @@ except IndexError:
     print('--port: listen port, default 8000, max 65535')
     print('--worker: worker thread number, default 4, max 16')
     print()
-    exit()
+    sys.exit()
 
 if arg1 == "production":
     import gunicorn.app.wsgiapp as wsgi
@@ -75,4 +75,4 @@ elif arg1 == 'initialization':
     from django.core.management import call_command
     call_command('makemigrations')
     call_command('migrate')
-    exit()
+    sys.exit()
