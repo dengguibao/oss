@@ -4,7 +4,7 @@ stages:
 deploy:
   stage: deploy
   tags:
-    - dev-ubuntu
+    - oss-server
   script:
      - rm -f db.sqlite3
      - cp -rf * /home/oss/
