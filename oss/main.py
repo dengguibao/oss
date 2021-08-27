@@ -23,7 +23,7 @@ except IndexError:
 if arg1 == "production":
     import gunicorn.app.wsgiapp as wsgi
 
-    default_port = 8000
+    default_port = 8080
     default_host = '0.0.0.0'
     default_worker = 4
 
