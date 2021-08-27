@@ -108,8 +108,7 @@ class TokenAuthentication(BaseAuthentication):
         return cache_user, None
 
     def verify_user_storage_is_expire(self, request, user: User):
-        if (request.path.startswith('/api/buckets') or request.path.startswith('/api/objects')) and \
-                not user.capacity_quota.valid():
+        if request.path.startswith('/api/objects') and not user.capacity_quota.valid():
             raise exceptions.NotAcceptable('storage is expired!')
 
 

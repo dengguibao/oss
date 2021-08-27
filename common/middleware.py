@@ -13,7 +13,6 @@ class RequestLogMiddleware(MiddlewareMixin):
         self.logger = settings.LOGGER
 
     def __call__(self, request):
-
         try:
             if request.content_type == 'multipart/form-data':
                 body = request.POST.dict()

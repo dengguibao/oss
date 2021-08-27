@@ -200,8 +200,8 @@ def handle_default_role(sender, instance, created, **kwargs):
 @receiver(post_save, sender=User)
 def handle_create_user(sender, instance, created, **kwargs):
     if created:
-        CapacityQuota.objects.create(user=instance)
-        BandwidthQuota.objects.create(user=instance)
+        CapacityQuota.objects.create(user=instance, start_time=time.time())
+        BandwidthQuota.objects.create(user=instance, start_time=time.time())
         Keys.objects.create(user=instance)
         Profile.objects.create(user=instance)
         Token.objects.create(user=instance)

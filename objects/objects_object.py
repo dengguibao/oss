@@ -140,9 +140,8 @@ def put_object_endpoint(request):
     if path:
         path = b64url2str(path)
         p = verify_path(path, bucket_name)
-
-    if not p:
-        raise ParseError(detail='illegal path')
+        if not p:
+            raise ParseError(detail='illegal path')
 
     # 验证文件名是否超长
     if len(filename) > 1024:
@@ -174,7 +173,6 @@ def put_object_endpoint(request):
         uploader = s3.create_multipart_upload(
             Bucket=b.name,
             Key=file_key,
-            # ACL=permission if permission.startswith('public-read') else 'private'
         )
 
         n = 1
@@ -216,13 +214,17 @@ def put_object_endpoint(request):
             'version_id': completed['VersionId'] if 'VersionId' in completed else None,
             'owner_id': b.user.id if b.permission == 'public-read-write' else req_user.id,
         }
-        if b.version_control:
+
+        try:
+            o = Objects.objects.get(bucket=b, key=file_key)
+        except Objects.DoesNotExist:
             o = Objects.objects.create(**record_data)
-            # new = True
         else:
-            o, _ = Objects.objects.update_or_create(**record_data)
-        o.permission = permission
-        o.save()
+            o.md5 = record_data['md5']
+            o.etag = record_data['etag']
+            o.owner_id = record_data['owner_id']
+            o.version_id = record_data['version_id']
+            o.save()
 
         # backup upload object on the background thread
         if b.backup:
@@ -231,12 +233,9 @@ def put_object_endpoint(request):
     except Exception as e:
         raise ParseError(detail=str(e))
 
-    # ser = ObjectsSerialize(o)
     return Response({
         'code': 0,
         'msg': 'success',
-        # 'data': ser.data,
-        # 'new': new,
     }, status=HTTP_201_CREATED)
 
 
@@ -275,7 +274,7 @@ def create_directory_endpoint(request):
             data['path'] = b64url2str(data['path'])
             p = verify_path(data['path'], data['bucket_name'])
 
-            if not p or p.owner != req_user or p.bucket.name != data['bucket_name']:
+            if not p:
                 raise ParseError(detail='illegal path')
 
             key = data['path'] + data['folder_name'] + '/'
@@ -291,7 +290,8 @@ def create_directory_endpoint(request):
             'owner': b.user if b.permission == 'public-read-write' else req_user
         }
         o = Objects.objects.create(**record_data)
-        backup_object(o)
+        if o.bucket.backup:
+            backup_object(o)
 
     except IntegrityError as e:
         raise ParseError(e)
@@ -385,22 +385,7 @@ def delete_object_endpoint(request):
     if o.bucket.read_only:
         raise ParseError('this bucket is read only')
 
-    # # 删除文件仅需要具有当前文件对象的权限
-    # if o.type == 'f':
-    #     obj_perm = o.permission
-    # # 删除目录需要具有桶权限
-    # if o.type == 'd':
-    #     obj_perm = o.bucket.permission
-    #
-    # assert obj_perm in ('public-read-write', 'private', 'public-read', 'authenticated'), 'unknown permission'
-    #
-    # if obj_perm != 'public-read-write':
-    #     if isinstance(req_user, AnonymousUser):
-    #         raise NotAuthenticated('anonymous user dont allow delete this file or directory')
-
     verify_bucket_owner_and_permission(request, PermAction.RW, o=o)
-    # if msg:
-    #     raise NotAuthenticated(msg)
 
     delete_list = []
     # 如果删除的对象为目录，则删除该目录下的所有一切对象
@@ -501,8 +486,8 @@ def download_object_endpoint(request):
                         Key=obj.key,
                         Range='bytes=%s-%s' % (n, n+min_unit-1),
                     )
-                except:
-                    raise ParseError('not found this object on the backend storage server')
+                except ClientError as e:
+                    raise ParseError(e.args)
                 n += min_unit
                 data = ret_data['Body'].read()
                 transfer_count += min_unit
@@ -540,7 +525,6 @@ def backup_object(origin: Objects):
         uploader = dest_client.create_multipart_upload(
             Bucket=dest_bucket.name,
             Key=origin.key,
-            # ACL=origin.permission if origin.permission.startswith('public-read') else 'private'
         )
 
         n = 0

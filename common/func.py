@@ -44,7 +44,7 @@ def verify_path(path: str, bucket_name: str):
     except Objects.DoesNotExist:
         return False
     else:
-        return obj
+        return True
 
 
 # def build_tmp_filename():
