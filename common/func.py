@@ -105,8 +105,8 @@ def s3_client(reg_id: int, username: str):
                 max_buckets=200,
                 user_caps='buckets=read,write;user=read,write;usage=read'
             )
-        except requests.exceptions.ConnectionError:
-            msg = 'connection to server %s timeout' % region.server
+        except requests.exceptions.ConnectionError as e:
+            msg = e.args[0]
             settings.LOGGER.error(msg)
             raise ParseError(msg)
 

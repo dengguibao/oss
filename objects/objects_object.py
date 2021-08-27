@@ -455,7 +455,7 @@ def download_object_endpoint(request):
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
     except Objects.MultipleObjectsReturned:
-        raise ParseError('The key found multi object')
+        raise ParseError('The key found multi object, please contact administrator')
 
     if obj.type == 'd':
         raise ParseError('download object is a directory')
@@ -506,10 +506,12 @@ def download_object_endpoint(request):
         res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
         return res
 
-    except ClientError:
-        raise NotFound('client error')
-    except ConnectionError:
-        raise ParseError('connection to upstream server timeout')
+    except ClientError as e:
+        raise NotFound(e.args[0])
+    except ConnectionError as e:
+        raise ParseError(e.args[0])
+    except Exception as e:
+        raise ParseError(e.args[0])
 
 
 def backup_object(origin: Objects):
