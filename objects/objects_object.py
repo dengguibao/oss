@@ -131,9 +131,11 @@ def put_object_endpoint(request):
     verify_bucket_owner_and_permission(request, PermAction.RW, b)
 
     object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
-    if len(permission) == 0:
+
+    if not permission:
         permission = b.permission
-    if permission and permission not in object_allow_acl:
+
+    if permission not in object_allow_acl:
         raise ParseError('permission value has wrong!')
 
     # 验证路程是否为非常路径（目录）
@@ -343,7 +345,7 @@ def list_objects_endpoint(request):
     ret = page.paginate_queryset(res.order_by('type', '-obj_id'), request)
     ser = ObjectsSerialize(ret, many=True)
 
-    def gen_pre_path(old_path:str) -> str:
+    def gen_pre_path(old_path: str) -> str:
         if not old_path:
             return ''
         else:
@@ -359,7 +361,7 @@ def list_objects_endpoint(request):
         'data': ser.data,
         'page_info': {
             'previous_path': gen_pre_path(path),
-            'current_path': str2b64url(path),
+            'current_path': str2b64url(path) if path else '',
             'record_count': len(res),
             'pag_size': size,
             'current_page': cur_page,
