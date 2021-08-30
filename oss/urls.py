@@ -19,6 +19,7 @@ from common.views import (
     build_image_verify_code_endpoint,
     build_qrcode
 )
+from objects.objects_object import download_file_from_url
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
@@ -29,6 +30,7 @@ urlpatterns = [
     # path('api/', include('public.urls'))
     path('api/user/send_verify_code', send_phone_verify_code_endpoint),
     path('api/captcha', build_image_verify_code_endpoint),
-    path('api/qrcode', build_qrcode)
+    path('api/qrcode', build_qrcode),
+    path('download_by_token/<str:token>', download_file_from_url)
 
 ]

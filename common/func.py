@@ -40,7 +40,7 @@ def verify_path(path: str, bucket_name: str):
     if not path or path.startswith('/') and not path.endswith('/'):
         return False
     try:
-        obj = Objects.objects.select_related("bucket").get(key=path, type='d', bucket__name=bucket_name)
+        Objects.objects.select_related("bucket").get(key=path, type='d', bucket__name=bucket_name)
     except Objects.DoesNotExist:
         return False
     else:

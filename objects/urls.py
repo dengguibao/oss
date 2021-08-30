@@ -7,6 +7,7 @@ from .objects_object import (
     list_objects_endpoint,
     put_object_endpoint,
     download_object_endpoint,
+    generate_download_url_endpoint,
 )
 app_name = 'objects'
 
@@ -18,5 +19,7 @@ urlpatterns = [
     path('objects/download_file', download_object_endpoint),
     path('objects/set_perm', set_object_perm_endpoint),
     path('objects/query_perm', query_object_perm_endpoint),
-    path('objects/acl', ObjectAclEndpoint.as_view())
+    path('objects/acl', ObjectAclEndpoint.as_view()),
+    path('objects/generate_download_url', generate_download_url_endpoint),
+
 ]

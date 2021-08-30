@@ -8,7 +8,8 @@ from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 from django.db.utils import IntegrityError
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, Http404
+from django.core.cache import cache
 
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -19,7 +20,7 @@ from rest_framework.status import HTTP_201_CREATED
 
 from buckets.models import Buckets, BucketAcl
 from common.func import verify_path, s3_client, validate_post_data, validate_license_expire
-from common.verify import verify_bucket_name, verify_object_name, verify_object_path
+from common.verify import verify_bucket_name, verify_object_name, verify_object_path, verify_max_length
 from objects.models import Objects, ObjectAcl
 from objects.serializer import ObjectsSerialize
 
@@ -212,7 +213,8 @@ def put_object_endpoint(request):
             'md5': md5.hexdigest(),
             'etag': completed['ETag'] if 'ETag' in completed else None,
             'version_id': completed['VersionId'] if 'VersionId' in completed else None,
-            'owner_id': b.user.id if b.permission == 'public-read-write' else req_user.id,
+            # 'owner_id': b.user.id if b.permission == 'public-read-write' else req_user.id,
+            'owner_id': b.user.id
         }
 
         try:
@@ -222,7 +224,7 @@ def put_object_endpoint(request):
         else:
             o.md5 = record_data['md5']
             o.etag = record_data['etag']
-            o.owner_id = record_data['owner_id']
+            # o.owner_id = record_data['owner_id']
             o.version_id = record_data['version_id']
             o.save()
 
@@ -287,7 +289,8 @@ def create_directory_endpoint(request):
             'type': 'd',
             'key': key,
             'root': data['path'] if 'path' in data else None,
-            'owner': b.user if b.permission == 'public-read-write' else req_user
+            # 'owner': b.user if b.permission == 'public-read-write' else req_user
+            'owner': b.user
         }
         o = Objects.objects.create(**record_data)
         if o.bucket.backup:
@@ -454,8 +457,8 @@ def download_object_endpoint(request):
         )
     except Objects.DoesNotExist:
         raise NotFound(detail='not found this object resource')
-    except Objects.MultipleObjectsReturned:
-        raise ParseError('The key found multi object, please contact administrator')
+    # except Objects.MultipleObjectsReturned:
+    #     raise ParseError('The key found multi object, please contact administrator')
 
     if obj.type == 'd':
         raise ParseError('download object is a directory')
@@ -464,54 +467,104 @@ def download_object_endpoint(request):
 
     try:
         s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
+        if isinstance(request.user, AnonymousUser):
+            bandwidth = settings.USER_MIN_BANDWIDTH
+        else:
+            bandwidth = request.user.bandwidth_quota.user_bandwidth()
 
-        file_size = obj.file_size
-
-        def file_content():
-            n = 0
-            transfer_count = 0
-            ts = time.time()
-            min_unit = 1024**2
-            # 下载带宽MB
-            if isinstance(request.user, AnonymousUser):
-                bandwidth = settings.USER_MIN_BANDWIDTH
-            else:
-                bandwidth = request.user.bandwidth_quota.user_bandwidth()
-
-            while 1:
-                # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
-                try:
-                    ret_data = s3.get_object(
-                        Bucket=obj.bucket.name,
-                        Key=obj.key,
-                        Range='bytes=%s-%s' % (n, n+min_unit-1),
-                    )
-                except ClientError as e:
-                    raise ParseError(e.args)
-                n += min_unit
-                data = ret_data['Body'].read()
-                transfer_count += min_unit
-                # print('already_transfer:', transfer_count, 'bandwidth_transfer:', bandwidth*min_unit, time.time()-ts)
-                if transfer_count >= bandwidth*min_unit:
-                    if time.time()-ts < 1:
-                        time.sleep(1-(time.time()-ts))
-                        ts = time.time()
-                    transfer_count = 0
-                yield data
-                if n > file_size:
-                    break
-
-        res = StreamingHttpResponse(file_content())
+        res = StreamingHttpResponse(iterate_down_file_from_s3(s3, obj, bandwidth))
         res['Content-Type'] = 'application/octet-stream'
+        res['Content-Length'] = obj.file_size
         res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
         return res
 
-    except ClientError as e:
-        raise NotFound(e.args[0])
-    except ConnectionError as e:
-        raise ParseError(e.args[0])
+    # except ClientError as e:
+    #     raise NotFound(e.args[0])
+    # except ConnectionError as e:
+    #     raise ParseError(e.args[0])
     except Exception as e:
         raise ParseError(e.args[0])
+
+
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+# @verify_permission(model_name='objects')
+def generate_download_url_endpoint(request):
+    req_user = request.user
+    _fields = (
+        ('*bucket_name', str, verify_bucket_name),
+        ('*key', str, (verify_max_length, 2048)),
+    )
+    # 检验字段
+    data = validate_post_data(request.body, _fields)
+    try:
+        obj = Objects.objects.select_related("bucket").select_related('bucket__bucket_region').get(
+            bucket__name=data['bucket_name'], key=b64url2str(data['key'])
+        )
+    except Objects.DoesNotExist:
+        raise NotFound(detail='not found this object resource')
+
+    if obj.type == 'd':
+        raise ParseError('download object is a directory')
+
+    verify_bucket_owner_and_permission(request, PermAction.R, o=obj)
+
+    key_md5 = hashlib.md5((obj.key+str(obj.obj_id)).encode()).hexdigest()
+    if not cache.get(key_md5):
+        cache.set(key_md5, (obj, req_user), 300)
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'url': 'http://'+request.META.get('HTTP_HOST')+'/download_by_token/'+key_md5
+    })
+
+
+def download_file_from_url(request, token):
+    down_obj = cache.get(token)
+    if not token or not down_obj:
+        return Http404
+
+    obj, req_user = down_obj
+    s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
+    bandwidth = req_user.bandwidth_quota.user_bandwidth()
+
+    res = StreamingHttpResponse(iterate_down_file_from_s3(s3, obj, bandwidth))
+    res['Content-Type'] = 'application/octet-stream'
+    res['Content-Length'] = obj.file_size
+    res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
+    return res
+
+
+def iterate_down_file_from_s3(s3, download_obj: Objects, bandwidth: int):
+    n = 0
+    transfer_count = 0
+    ts = time.time()
+    min_unit = 1024 ** 2
+
+    while 1:
+        # 分段从上游ceph上面下载字节流数据(单位为字节，非比特，不用转换)
+        try:
+            ret_data = s3.get_object(
+                Bucket=download_obj.bucket.name,
+                Key=download_obj.key,
+                Range='bytes=%s-%s' % (n, n + min_unit - 1),
+            )
+        except ClientError as e:
+            raise ParseError(e.args)
+
+        n += min_unit
+        data = ret_data['Body'].read()
+        transfer_count += min_unit
+        # print('already_transfer:', transfer_count, 'bandwidth_transfer:', bandwidth*min_unit, time.time()-ts)
+        if transfer_count >= bandwidth * min_unit:
+            if time.time() - ts < 1:
+                time.sleep(1 - (time.time() - ts))
+                ts = time.time()
+            transfer_count = 0
+        yield data
+        if n > download_obj.file_size:
+            break
 
 
 def backup_object(origin: Objects):

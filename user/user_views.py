@@ -558,12 +558,12 @@ def query_user_usage(request):
             if dt not in temp:
                 temp[dt] = {
                     'get_obj': {
-                        'successful_ops': random.randint(10,100),
-                        'bytes_sent':  random.randint(10,100),
+                        'successful_ops': 0,
+                        'bytes_sent':  0,
                     },
                     'put_obj': {
-                        'successful_ops':  random.randint(10,100),
-                        'bytes_received':  random.randint(10,100),
+                        'successful_ops':  0,
+                        'bytes_received':  0,
                     },
                 }
             __start_time_ts += 86400
@@ -577,6 +577,7 @@ def query_user_usage(request):
         # buff = {}
         for bucket in origin_data['entries'][0]['buckets']:
             act_time = bucket['time'][:10]
+            print(act_time)
             # buff[act_time] = {
             #     'get_obj': {
             #         'successful_ops': 0,
@@ -587,8 +588,10 @@ def query_user_usage(request):
             #         'bytes_received': 0,
             #     },
             # }
+            print(bucket)
             for cate in bucket['categories']:
                 # print(act_time, cate)
+                print(cate)
                 if 'category' in cate and cate['category'] == 'put_obj':
                     __fake_data[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
                     __fake_data[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
@@ -609,25 +612,26 @@ def query_user_usage(request):
 
     fake_data = __build_fake_data(start_time_ts, end_time_ts)
 
-    # for i in reg:
-    #     rgw = rgw_client(i.reg_id)
-    #     try:
-    #         rgw.get_user(uid=req_user.keys.ceph_uid)
-    #     except NoSuchUser:
-    #         continue
-    #     except ConnectionError:
-    #         raise ParseError('connection to rgw server is timeout!')
-    #     except ServerDown:
-    #         raise ParseError('The backing server is not available.')
-    #
-    #     data = rgw.get_usage(
-    #         uid=u.keys.ceph_uid,
-    #         start=time.strftime(fmt, time.localtime(start_time_ts)),
-    #         end=time.strftime(fmt, time.localtime(end_time_ts)),
-    #         show_summary=True,
-    #         show_entries=True
-    #     )
-    #     __update_fake_date(fake_data, data)
+    for i in reg:
+        if i.type != 'local':
+            continue
+        rgw = rgw_client(i.reg_id)
+        try:
+            rgw.get_user(uid=req_user.keys.ceph_uid, stats=True)
+        except NoSuchUser:
+            continue
+        except ConnectionError:
+            raise ParseError('connection to rgw server is timeout!')
+        except ServerDown:
+            raise ParseError('The backing server is not available.')
+        data = rgw.get_usage(
+            uid=u.keys.ceph_uid,
+            # start=time.strftime(fmt, time.localtime(start_time_ts)),
+            # end=time.strftime(fmt, time.localtime(end_time_ts)),
+            show_summary=False,
+            show_entries=True
+        )
+        __update_fake_date(fake_data, data)
 
     for k, v in fake_data.items():
         usage_data.append({
