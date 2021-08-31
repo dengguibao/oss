@@ -11,32 +11,32 @@ from buckets.models import BucketAcl
 from objects.objects_object import PermAction
 
 
-def verify_file_owner_and_permission(request, perm: PermAction, o: Objects):
+def verify_file_owner_and_permission(request, perm: PermAction, objects: Objects):
     """
     验证文件对象是否有权限访问
-    :param o: Objects model instance
+    :param objects: Objects model instance
     :param request: WSGI request
     :param perm: authenticated-read, authenticated-read-write
     :return if has permission then pass else raise a exception
     """
-    if o.permission == 'private':
-        if request.user != o.owner and request.user != o.bucket.user:
+    if objects.permission == 'private':
+        if request.user != objects.owner and request.user != objects.bucket.user:
             raise ParseError('object and owner not match')
 
-    if o.permission == 'authenticated':
+    if objects.permission == 'authenticated':
         object_authorize_user_list = ObjectAcl.objects.filter(
-            object_id=o.obj_id, permission__startswith='authenticated-%s' % perm.value
+            object_id=objects.obj_id, permission__startswith='authenticated-%s' % perm.value
         ).values_list('user_id', flat=True)
 
         bucket_authorize_user_list = BucketAcl.objects.filter(
-            bucket=o.bucket, permission__startswith='authenticated-%s' % perm.value
+            bucket=objects.bucket, permission__startswith='authenticated-%s' % perm.value
         ).values_list('user_id', flat=True)
 
         allow_user_list = set(list(object_authorize_user_list)+list(bucket_authorize_user_list))
         # 桶拥有者、文件对象拥有者、已授权
         if request.user.id not in allow_user_list and \
-                request.user != o.bucket.user and \
-                request.user != o.owner:
+                request.user != objects.bucket.user and \
+                request.user != objects.owner:
             raise ParseError('current user cant allow access this object')
 
 

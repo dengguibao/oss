@@ -626,8 +626,8 @@ def query_user_usage(request):
             raise ParseError('The backing server is not available.')
         data = rgw.get_usage(
             uid=u.keys.ceph_uid,
-            # start=time.strftime(fmt, time.localtime(start_time_ts)),
-            # end=time.strftime(fmt, time.localtime(end_time_ts)),
+            start=time.strftime(fmt, time.localtime(start_time_ts)),
+            end=time.strftime(fmt, time.localtime(end_time_ts)),
             show_summary=False,
             show_entries=True
         )

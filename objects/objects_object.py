@@ -1,5 +1,6 @@
 import hashlib
 import time
+import os
 import threading
 from enum import Enum
 
@@ -32,6 +33,12 @@ class PermAction(Enum):
     R = 'read'
 
 
+PERMISSION_LIST = (
+    'private', 'public-read',
+    'public-read-write', 'authenticated'
+)
+
+
 def str2b64url(s: str) -> str:
     return base64.urlsafe_b64encode(s.encode()).decode()
 
@@ -40,70 +47,70 @@ def b64url2str(s: str) -> str:
     return base64.urlsafe_b64decode(s.encode()).decode()
 
 
-def verify_bucket_owner_and_permission(request, perm: PermAction, b: Buckets = None, o: Objects = None):
+def verify_bucket_owner_and_permission(request, perm: PermAction, bucket: Buckets = None, objects: Objects = None):
     """
     验证文件对象是否有权限访问
-    :param b: Buckets model instance
+    :param bucket: Buckets model instance
     :param request: WSGI request
     :param perm: read, read-write
-    :param o: Object model instance
+    :param objects: Object model instance
     :return if has permission then pass else raise a exception
     """
 
-    if not o and not b:
+    if not objects and not bucket:
         raise ParseError('500')
 
-    if o:
-        if o.permission == 'public-%s' % perm.value:
+    if objects:
+        if objects.permission == 'public-%s' % perm.value:
             return
 
-        if o.permission == 'private':
-            if request.user != o.owner and request.user != o.bucket.user:
+        if objects.permission == 'private':
+            if request.user != objects.owner and request.user != objects.bucket.user:
                 raise ParseError('file owner not match')
 
-        if o.permission == 'authenticated':
+        if objects.permission == 'authenticated':
             object_authorize_user_list = ObjectAcl.objects.filter(
-                object=o, permission__startswith='authenticated-%s' % perm.value
+                object=object, permission__startswith='authenticated-%s' % perm.value
             ).values_list('user_id', flat=True)
 
             bucket_authorize_user_list = BucketAcl.objects.filter(
-                bucket=o.bucket, permission__startswith='authenticated-%s' % perm.value
-            ). values_list('user_id', flat=True)
+                bucket=objects.bucket, permission__startswith='authenticated-%s' % perm.value
+            ).values_list('user_id', flat=True)
 
-            authorized_list = set(list(object_authorize_user_list)+list(bucket_authorize_user_list))
+            authorized_list = set(list(object_authorize_user_list) + list(bucket_authorize_user_list))
             if request.user.id not in authorized_list and \
-                    request.user != o.owner and \
-                    request.user != o.bucket.user:
+                    request.user != objects.owner and \
+                    request.user != objects.bucket.user:
                 raise ParseError('No authorize access that file')
 
-    if b:
-        if b.permission == 'public-%s' % perm.value:
+    if bucket:
+        if bucket.permission == 'public-%s' % perm.value:
             return
 
-        if b.permission == 'private':
-            if request.user != b.user:
+        if bucket.permission == 'private':
+            if request.user != bucket.user:
                 raise ParseError('bucket owner not match')
 
-        if b.permission == 'authenticated':
+        if bucket.permission == 'authenticated':
             bucket_authorize_user_list = BucketAcl.objects.filter(
-                bucket_id=b.bucket_id, permission__startswith='authenticated-%s' % perm.value
+                bucket_id=bucket.bucket_id, permission__startswith='authenticated-%s' % perm.value
             ).values_list('user_id', flat=True)
 
             # 请求用户不在桶授权列表内、文件授权列表内、不是桶拥有者、文件拥有者
             if request.user.id not in list(bucket_authorize_user_list) and \
-                    request.user != b.user:
+                    request.user != bucket.user:
                 raise ParseError('No authorize access that bucket')
 
 
 @api_view(('PUT',))
 # @verify_permission(model_name='objects')
 @permission_classes((AllowAny,))
-def put_object_endpoint(request):
+def upload_file_to_bucket_endpoint(request):
     """
     上传文件对象至bucket
     """
     validate_license_expire()
-    req_user = request.user
+    # req_user = request.user
     bucket_name = request.POST.get('bucket_name', None)
     # filename = request.POST.get('filename', None)
     file = request.FILES.get('file', None)
@@ -115,7 +122,7 @@ def put_object_endpoint(request):
         raise ParseError(detail='some required field is mission')
 
     filename = file.name
-    for i in ['/', '\\', '|']:
+    for i in ['/', '\\', '|', '#']:
         if i in filename:
             raise ParseError(detail='filename contains some special char')
 
@@ -130,13 +137,10 @@ def put_object_endpoint(request):
 
     verify_bucket_owner_and_permission(request, PermAction.RW, b)
 
-    object_allow_acl = ('private', 'public-read', 'public-read-write', 'authenticated')
-
-    if not permission:
-        permission = b.permission
-
-    if permission not in object_allow_acl:
+    if permission and permission not in PERMISSION_LIST:
         raise ParseError('permission value has wrong!')
+    else:
+        permission = b.permission
 
     # 验证路程是否为非常路径（目录）
     p = False
@@ -180,7 +184,7 @@ def put_object_endpoint(request):
 
         n = 1
         parts = []
-        for data in file.chunks(chunk_size=5*1024**2):
+        for data in file.chunks(chunk_size=5 * 1024 ** 2):
             md5.update(data)
             part = s3.upload_part(
                 Body=data,
@@ -215,8 +219,8 @@ def put_object_endpoint(request):
             'md5': md5.hexdigest(),
             'etag': completed['ETag'] if 'ETag' in completed else None,
             'version_id': completed['VersionId'] if 'VersionId' in completed else None,
-            # 'owner_id': b.user.id if b.permission == 'public-read-write' else req_user.id,
-            'owner_id': b.user.id
+            'owner_id': b.user.id,
+            'permission': permission,
         }
 
         try:
@@ -252,7 +256,6 @@ def create_directory_endpoint(request):
     该操作仅存在本地数据库，在ceph不会有任何记录
     """
     validate_license_expire()
-    req_user = request.user
     _fields = (
         ('*bucket_name', str, verify_bucket_name),
         ('*folder_name', str, verify_object_name),
@@ -322,7 +325,7 @@ def list_objects_endpoint(request):
     except Buckets.DoesNotExist:
         raise NotFound(detail='not found bucket')
 
-    verify_bucket_owner_and_permission(request, PermAction.R, b)
+    verify_bucket_owner_and_permission(request, PermAction.R, bucket=b)
     res = Objects.objects.select_related('bucket').select_related('owner').filter(bucket=b)
 
     if path:
@@ -350,7 +353,7 @@ def list_objects_endpoint(request):
             return ''
         else:
             x = old_path.split('/')[:-2]
-            x = '/'.join(x)+'/' if x else None
+            x = '/'.join(x) + '/' if x else None
             if x:
                 return str2b64url(x)
             return ''
@@ -390,7 +393,7 @@ def delete_object_endpoint(request):
     if o.bucket.read_only:
         raise ParseError('this bucket is read only')
 
-    verify_bucket_owner_and_permission(request, PermAction.RW, o=o)
+    verify_bucket_owner_and_permission(request, PermAction.RW, objects=o)
 
     delete_list = []
     # 如果删除的对象为目录，则删除该目录下的所有一切对象
@@ -465,7 +468,7 @@ def download_object_endpoint(request):
     if obj.type == 'd':
         raise ParseError('download object is a directory')
 
-    verify_bucket_owner_and_permission(request, PermAction.R, o=obj)
+    verify_bucket_owner_and_permission(request, PermAction.R, objects=obj)
 
     try:
         s3 = s3_client(obj.bucket.bucket_region.reg_id, obj.bucket.user.username)
@@ -509,17 +512,95 @@ def generate_download_url_endpoint(request):
     if obj.type == 'd':
         raise ParseError('download object is a directory')
 
-    verify_bucket_owner_and_permission(request, PermAction.R, o=obj)
+    verify_bucket_owner_and_permission(request, PermAction.R, objects=obj)
 
-    key_md5 = hashlib.md5((obj.key+str(obj.obj_id)).encode()).hexdigest()
+    key_md5 = hashlib.md5((obj.key + str(obj.obj_id)).encode()).hexdigest()
     if not cache.get(key_md5):
         cache.set(key_md5, (obj, req_user), 300)
 
     return Response({
         'code': 0,
         'msg': 'success',
-        'url': 'http://'+request.META.get('HTTP_HOST')+'/download_by_token/'+key_md5
+        'url': 'http://' + request.META.get('HTTP_HOST') + '/download_by_token/' + key_md5
     })
+
+
+@api_view(('PUT',))
+@permission_classes((AllowAny,))
+def put_object_to_bucket_endpoint(request):
+    validate_license_expire()
+    permission = request.GET.get('permission', None)
+    bucket_name = request.GET.get('bucket_name', None)
+    key = request.GET.get('key', None)
+    if not bucket_name or not key:
+        raise ParseError('not bucket_name or key')
+
+    if len(key) > 2048:
+        raise ParseError('key value is to long')
+
+    if key.startswith('/') or key.endswith('/') or '#' in key or '\\' in key or '|' in key:
+        raise ParseError('illegal key')
+
+    try:
+        bucket = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
+    except Buckets.DoesNotExist:
+        raise ParseError("illegal bucket name")
+
+    if bucket.read_only:
+        raise ParseError('bucket is read only')
+
+    if permission and permission not in PERMISSION_LIST:
+        raise ParseError('illegal permission value')
+    else:
+        permission = bucket.permission
+
+    verify_bucket_owner_and_permission(request, PermAction.RW, bucket=bucket)
+
+    root, name = os.path.split(key)
+
+    if root:
+        generate_folder_by_key(bucket, root)
+
+    if bucket.version_control:
+        name = f'{int(time.time())}_{name}'
+    try:
+        s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+        result = s3.put_object(
+            Bucket=bucket_name,
+            Body=request.body,
+            Key=key
+        )
+
+    except ClientError as e:
+        raise ParseError(e.args[0])
+
+    try:
+        o = Objects.objects.get(bucket=bucket, key=key)
+        o.file_size = len(request.body)
+        o.md5 = hashlib.md5(request.body).hexdigest()
+        o.etag = result['ETag'].replace('"', '')
+        o.save()
+    except Objects.DoesNotExist:
+        o = Objects.objects.create(
+            root=root+'/',
+            type='f',
+            name=name,
+            key=key,
+            permission=permission,
+            file_size=len(request.body),
+            bucket_id=bucket.bucket_id,
+            owner_id=bucket.user.id,
+            etag=result['ETag'].replace('"', ''),
+            md5=hashlib.md5(request.body).hexdigest()
+        )
+
+    if bucket.backup:
+        backup_object(o)
+
+    return Response({
+        'code': 0,
+        'msg': 'success'
+    }, status=HTTP_201_CREATED)
 
 
 def download_file_from_url(request, token):
@@ -536,6 +617,24 @@ def download_file_from_url(request, token):
     res['Content-Length'] = obj.file_size
     res['Content-Disposition'] = 'attachment;filename="%s"' % obj.name.encode().decode('ISO-8859-1')
     return res
+
+
+def generate_folder_by_key(bucket: Buckets, key: str):
+    root = ''
+    path = key.split('/')
+    for i in path:
+        i = i.strip()
+        folder = Objects.objects.filter(bucket_id=bucket.bucket_id, key=root + i + '/')
+        if not folder:
+            Objects.objects.create(
+                owner_id=bucket.user_id,
+                bucket_id=bucket.bucket_id,
+                root=root,
+                name=i + '/',
+                type='d',
+                key=root + i + '/'
+            )
+        root += i + '/'
 
 
 def iterate_down_file_from_s3(s3, download_obj: Objects, bandwidth: int):

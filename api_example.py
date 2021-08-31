@@ -52,7 +52,7 @@ class Oss:
         }
 
         if perm:
-            post_data['permission'] = perm
+            post_data['permission'] = perm.value
 
         if path_key_url:
             post_data['path'] = path_key_url
@@ -123,6 +123,29 @@ class Oss:
         )
         return rep.content
 
+    def pub_object_to_bucket(self, body: bytes, bucket_name:str, key: str, permission: Permission=None):
+        """
+        其中key不要包含特\,#等特殊字符
+        标准的格式为a/b/c/d/filename.txt
+        其中a/b/c/d是指目录节构，如果不存在，系统自动创建该目录节构
+        """
+
+        params = {
+            'access_key': self.ak,
+            'secret_key': self.sk,
+            'bucket_name': bucket_name,
+            'key': key,
+        }
+        if permission:
+            params['permission'] = permission.value
+
+        rep = self.session.put(
+            '%s/api/objects/put_object' % self.server,
+            data=body,
+            params=params
+        )
+        return rep.json()
+
 
 o = Oss(
     access_key='QCbqZSvWfKM8PkX67Uc1GtTNgdyw9R4a',
@@ -161,10 +184,22 @@ print(result)
 # )
 # print(result)
 
-# 下载比特流到打定的文件
+# 下载比特流到指定的文件
 # fp = open('aaa.py', 'wb+')
 # fp.write(o.download_file_by_bucket(
 #     bucket_name='bbb',
 #     key_url='dGVzdC5weQ=='
 # ))
 # fp.close()
+
+
+# 文件流的形式上传文件
+# with open('demo.py', 'rb') as fp:
+#     body = fp.read()
+#
+#     result = o.pub_object_to_bucket(
+#         body=body,
+#         bucket_name='bbb',
+#         key='aaa/zzz/test.py'
+#     )
+#     print(result)
