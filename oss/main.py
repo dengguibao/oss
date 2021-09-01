@@ -20,6 +20,10 @@ except IndexError:
     print()
     sys.exit()
 
+if arg1 not in ('production', 'initialization'):
+    print('arg param err!')
+    sys.exit()
+
 if arg1 == "production":
     import gunicorn.app.wsgiapp as wsgi
 
