@@ -1,6 +1,7 @@
 import os
 import sys
 import django
+from django.conf import settings
 from common.verify import verify_ip_addr
 
 
@@ -26,6 +27,7 @@ if arg1 not in ('production', 'initialization'):
 
 if arg1 == "production":
     import gunicorn.app.wsgiapp as wsgi
+    # import pyuwsgi
 
     default_port = 8080
     default_host = '0.0.0.0'
@@ -71,9 +73,27 @@ if arg1 == "production":
         worker = default_worker
 
     # This is just a simple way to supply args to gunicorn
-    sys.argv = [".", "oss.wsgi", "--bind=%s:%s" % (host, port),  "--workers=%s" % worker]
-
-    wsgi.run()
+    # sys.argv = [".", "oss.wsgi", "--bind=%s:%s" % (host, port),  "--workers=%s" % worker]
+    #
+    # wsgi.run()
+    pyuwsgi.run([
+        "--master",
+        "--strict",
+        "--need-app",
+        "--module",
+        ":".join(settings.WSGI_APPLICATION.rsplit(".", 1)),
+        "--no-orphans",
+        "--vacuum",
+        "--auto-procname",
+        "--enable-threads",
+        "--offload-threads=%s" % worker,
+        "--thunder-lock",
+        "--static-map=/static=%s/static" % settings.BASE_DIR,
+        "--static-expires",
+        # 90 days
+        "/* 7776000",
+        "--http=%s:%s" % (host, port)
+    ])
 
 elif arg1 == 'initialization':
     from django.core.management import call_command
