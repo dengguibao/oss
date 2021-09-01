@@ -26,8 +26,8 @@ if arg1 not in ('production', 'initialization'):
     sys.exit()
 
 if arg1 == "production":
-    import gunicorn.app.wsgiapp as wsgi
-    # import pyuwsgi
+    # import gunicorn.app.wsgiapp as wsgi
+    import pyuwsgi
 
     default_port = 8080
     default_host = '0.0.0.0'
