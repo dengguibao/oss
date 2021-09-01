@@ -9,6 +9,11 @@ from .objects_object import (
     download_object_endpoint,
     generate_download_url_endpoint,
     put_object_to_bucket_endpoint,
+
+    init_multipart_upload_endpoint,
+    upload_part_endpoint_endpoint,
+    completed_multipart_upload_endpoint,
+    abort_multipart_upload_endpoint
 )
 app_name = 'objects'
 
@@ -23,5 +28,10 @@ urlpatterns = [
     path('objects/query_perm', query_object_perm_endpoint),
     path('objects/acl', ObjectAclEndpoint.as_view()),
     path('objects/generate_download_url', generate_download_url_endpoint),
+
+    path('objects/init_multipart_upload', init_multipart_upload_endpoint),
+    path('objects/upload_part', upload_part_endpoint_endpoint),
+    path('objects/completed_multipart_upload', completed_multipart_upload_endpoint),
+    path('objects/abort_multipart_upload', abort_multipart_upload_endpoint),
 
 ]

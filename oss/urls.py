@@ -14,15 +14,25 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from common.views import (
     send_phone_verify_code_endpoint,
     build_image_verify_code_endpoint,
     build_qrcode
 )
 from objects.objects_object import download_file_from_url
+from django.shortcuts import render
+
+
+def index(request):
+    return render(request, 'index.html', {
+        'api_url': 'http://%s' % request.META['HTTP_HOST']
+    })
+
 
 urlpatterns = [
-    # path('admin/', admin.site.urls),
+    path('', index),
     path('api/', include('user.urls')),
     path('api/', include('buckets.urls')),
     path('api/', include('objects.urls')),
@@ -33,4 +43,6 @@ urlpatterns = [
     path('api/qrcode', build_qrcode),
     path('download_by_token/<str:token>', download_file_from_url)
 
-]
+] + static(
+    settings.STATIC_URL, document_root='%s/static' % settings.BASE_DIR
+)

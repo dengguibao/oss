@@ -62,7 +62,6 @@ def build_qrcode(request):
     fields = (
         ('*content', str, len),
     )
-    print(request.body)
     data = validate_post_data(request.body, fields)
     qr = qrcode.QRCode(
         version=1,

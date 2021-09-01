@@ -603,6 +603,207 @@ def put_object_to_bucket_endpoint(request):
     }, status=HTTP_201_CREATED)
 
 
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+def init_multipart_upload_endpoint(request):
+    validate_license_expire()
+    bucket_name = request.POST.get('bucket_name', None)
+    key = request.POST.get('key', None)
+    permission = request.POST.get('permission', None)
+
+    if not bucket_name or not key:
+        raise ParseError('not bucket_name or key')
+
+    if len(key) > 2048:
+        raise ParseError('key value is to long')
+
+    if key.startswith('/') or key.endswith('/') or '#' in key or '\\' in key or '|' in key:
+        raise ParseError('illegal key')
+
+    try:
+        bucket = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
+    except Buckets.DoesNotExist:
+        raise ParseError("illegal bucket name")
+
+    if bucket.read_only:
+        raise ParseError('bucket is read only')
+
+    if permission and permission not in PERMISSION_LIST:
+        raise ParseError('illegal permission value')
+    else:
+        permission = bucket.permission
+
+    verify_bucket_owner_and_permission(request, PermAction.RW, bucket=bucket)
+    try:
+        s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+        result = s3.create_multipart_upload(
+            Bucket=bucket.name,
+            Key=key,
+        )
+    except Exception as e:
+        raise ParseError(e.args[0])
+
+    cache.set(result['UploadId'], (bucket, permission, result, key), 3600)
+
+    if 'ResponseMetadata' in result:
+        del result['ResponseMetadata']
+    return Response(result)
+
+
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+def upload_part_endpoint_endpoint(request):
+    upload_id = request.GET.get("upload_id", None)
+    part_id = request.GET.get('part_id', 1)
+    try:
+        part = int(part_id)
+    except ValueError:
+        raise ParseError('invalid part id')
+
+    if not upload_id or not cache.get(upload_id):
+        raise ParseError('not found this upload id')
+
+    bucket, _, uploader, key = cache.get(upload_id)
+    try:
+        s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+        result = s3.upload_part(
+            Body=request.body,
+            Bucket=bucket.name,
+            ContentLength=len(request.body),
+            Key=key,
+            UploadId=uploader['UploadId'],
+            PartNumber=part
+        )
+    except Exception as e:
+        raise ParseError(e.args[0])
+
+    part_size = cache.get(f'{upload_id}_filesize')
+    if not part_size:
+        cache.set(f'{upload_id}_filesize', len(request.body), 3600)
+    else:
+        cache.set(f'{upload_id}_filesize', part_size+len(request.body), 3600)
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'data': {
+            'PartNumber': part_id,
+            'ETag': result['ETag'].replace('"', '')
+        }
+    })
+
+
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+def completed_multipart_upload_endpoint(request):
+    upload_id = request.POST.get("upload_id", None)
+    etag_list = request.POST.get('etag_list', None)
+    if not etag_list:
+        raise ParseError('not found any etag')
+
+    if not upload_id or not cache.get(upload_id):
+        raise ParseError('not found this upload id')
+
+    parts = []
+    n = 1
+    for i in etag_list.split(','):
+        parts.append({
+            'ETag': i,
+            'PartNumber': n
+        })
+        n += 1
+
+    bucket, permission, uploader, key = cache.get(upload_id)
+    try:
+        s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+        result = s3.complete_multipart_upload(
+            Bucket=bucket.name,
+            Key=key,
+            UploadId=uploader['UploadId'],
+            MultipartUpload={'Parts': parts}
+        )
+    except Exception as e:
+        raise ParseError(e.args[0])
+
+    root, name = os.path.split(key)
+    file_size = cache.get(f'{upload_id}_filesize')
+    if root:
+        generate_folder_by_key(bucket, key)
+    if bucket.version_control:
+        name = f'{int(time.time())}_{name}'
+
+    try:
+        o = Objects.objects.get(bucket=bucket, key=key)
+        o.file_size = file_size
+        o.etag = result['ETag'].replace('"', '')
+        o.save()
+    except Objects.DoesNotExist:
+        o = Objects.objects.create(
+            root=root+'/',
+            type='f',
+            name=name,
+            key=key,
+            permission=permission,
+            file_size=0,
+            bucket_id=bucket.bucket_id,
+            owner_id=bucket.user.id,
+            etag=result['ETag'].replace('"', ''),
+        )
+    if bucket.backup:
+        backup_object(o)
+    cache.delete(f'{upload_id}')
+    cache.delete(f'{upload_id}_filesize')
+    if 'ResponseMetadata' in result:
+        del result['ResponseMetadata']
+        del result['Location']
+
+    return Response({
+        'code': 0,
+        'msg': 'success',
+        'data': result
+    })
+
+
+@api_view(('POST',))
+@permission_classes((AllowAny,))
+def abort_multipart_upload_endpoint(request):
+    upload_id = request.POST.get('upload_id', None)
+    bucket_name = request.POST.get('bucket_name', None)
+    key = request.POST.get('key', None)
+
+    if not upload_id:
+        raise ParseError('illegal upload id')
+
+    if not bucket_name or not key:
+        raise ParseError('not bucket_name or key')
+
+    if len(key) > 2048:
+        raise ParseError('key value is to long')
+
+    if key.startswith('/') or key.endswith('/') or '#' in key or '\\' in key or '|' in key:
+        raise ParseError('illegal key')
+
+    try:
+        bucket = Buckets.objects.select_related('bucket_region').get(name=bucket_name)
+    except Buckets.DoesNotExist:
+        raise ParseError("illegal bucket name")
+
+    verify_bucket_owner_and_permission(request, PermAction.RW, bucket=bucket)
+    try:
+        s3 = s3_client(bucket.bucket_region.reg_id, bucket.user.username)
+        result = s3.abort_multipart_upload(
+            Bucket=bucket.name,
+            Key=key,
+            UploadId=upload_id,
+        )
+    except Exception as e:
+        raise ParseError(e.args[0])
+
+    if cache.get(upload_id):
+        cache.delete(upload_id)
+    return Response(result)
+
+
 def download_file_from_url(request, token):
     down_obj = cache.get(token)
     if not token or not down_obj:
