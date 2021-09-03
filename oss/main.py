@@ -85,8 +85,10 @@ if arg1 == "production":
         "--no-orphans",
         "--vacuum",
         "--auto-procname",
+        # 因为python有GIL的原因，能过此选项目开启多线程
         "--enable-threads",
-        "--offload-threads=%s" % worker,
+        # "--offload-threads=%s" % worker,
+        "--processes=%s" % worker,
         "--thunder-lock",
         "--static-map=/static=%s/static" % settings.BASE_DIR,
         "--static-expires",

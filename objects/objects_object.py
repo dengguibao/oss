@@ -121,10 +121,9 @@ def upload_file_to_bucket_endpoint(request):
     if not file or not bucket_name:
         raise ParseError(detail='some required field is mission')
 
-    filename = file.name
-    for i in ['/', '\\', '|', '#']:
-        if i in filename:
-            raise ParseError(detail='filename contains some special char')
+    filename = '%s' % file.name
+    if not validate_special_char(filename):
+        raise ParseError(detail='filename contains some special char')
 
     # 验证bucket是否为异常bucket
     try:
@@ -532,13 +531,14 @@ def put_object_to_bucket_endpoint(request):
     permission = request.GET.get('permission', None)
     bucket_name = request.GET.get('bucket_name', None)
     key = request.GET.get('key', None)
+
     if not bucket_name or not key:
         raise ParseError('not bucket_name or key')
 
     if len(key) > 2048:
         raise ParseError('key value is to long')
 
-    if key.startswith('/') or key.endswith('/') or '#' in key or '\\' in key or '|' in key:
+    if key.startswith('/') or key.endswith('/') or not validate_special_char(key):
         raise ParseError('illegal key')
 
     try:
@@ -820,11 +820,23 @@ def download_file_from_url(request, token):
     return res
 
 
+def validate_special_char(k):
+    special_char = (
+        '\\', '#', ' ', '(', ')', '\'', '"', '{', '}'
+    )
+    for i in special_char:
+        if i in k:
+            return False
+    return True
+
+
 def generate_folder_by_key(bucket: Buckets, key: str):
     root = ''
     path = key.split('/')
     for i in path:
         i = i.strip()
+        if not i:
+            continue
         folder = Objects.objects.filter(bucket_id=bucket.bucket_id, key=root + i + '/')
         if not folder:
             Objects.objects.create(

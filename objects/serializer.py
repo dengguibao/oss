@@ -8,13 +8,19 @@ import base64
 class ObjectsSerialize(ModelSerializer):
     owner = SimpleUserSerialize(read_only=True)
     bucket = SimpleBucketSerialize(read_only=True)
+    type = SerializerMethodField()
     cn_type = SerializerMethodField()
     key_url = SerializerMethodField()
-    root_url = SerializerMethodField()
-    permission = SerializerMethodField()
+    # root_url = SerializerMethodField()
+    cn_permission = SerializerMethodField()
+    root = SerializerMethodField()
 
-    def get_root_url(self, obj):
-        return obj.root.replace('/', ',') if obj.root else None
+
+    def get_type(self, obj):
+        return 'File' if obj.type == 'f' else 'Directory'
+
+    def get_root(self, obj):
+        return obj.root if obj.root else '/'
 
     def get_key_url(self, obj):
         return base64.urlsafe_b64encode(obj.key.encode())
@@ -27,7 +33,7 @@ class ObjectsSerialize(ModelSerializer):
             return "文件"
         return "未知"
 
-    def get_permission(self, obj):
+    def get_cn_permission(self, obj):
         data = {
             'private': '私有',
             'public-read': '公开读',
@@ -41,6 +47,6 @@ class ObjectsSerialize(ModelSerializer):
         fields = (
             'name', 'bucket', 'obj_id', 'type',
             'root', 'file_size', 'md5', 'etag', 'owner',
-            'upload_time', "cn_type", 'key', 'key_url',
-            'root_url', 'permission'
+            'upload_time', "cn_type", 'key_url',
+            'permission', 'cn_permission', 'type'
         )
