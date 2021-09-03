@@ -542,6 +542,9 @@ def query_user_usage(request):
     start_time_ts = date2timestamp(start_time)
     end_time_ts = date2timestamp(end_time)
 
+    if time.time()-start_time_ts > 31*86400:
+        raise ParseError('start time to now more than 31 days')
+
     if start_time_ts > end_time_ts or end_time_ts > time.time():
         raise ParseError('end time illegal')
 
@@ -577,38 +580,15 @@ def query_user_usage(request):
         # buff = {}
         for bucket in origin_data['entries'][0]['buckets']:
             act_time = bucket['time'][:10]
-            print(act_time)
-            # buff[act_time] = {
-            #     'get_obj': {
-            #         'successful_ops': 0,
-            #         'bytes_sent': 0,
-            #     },
-            #     'put_obj': {
-            #         'successful_ops': 0,
-            #         'bytes_received': 0,
-            #     },
-            # }
-            print(bucket)
+            # print(bucket)
             for cate in bucket['categories']:
-                # print(act_time, cate)
-                print(cate)
+                # print(cate)
                 if 'category' in cate and cate['category'] == 'put_obj':
                     __fake_data[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
                     __fake_data[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
                 if 'category' in cate and cate['category'] == 'get_obj':
                     __fake_data[act_time]['get_obj']['successful_ops'] += cate['successful_ops']
                     __fake_data[act_time]['get_obj']['bytes_sent'] += cate['bytes_sent']
-        # s_key = sorted(buff)
-        # __data = []
-        # for k in s_key:
-        #     __tmp = {
-        #         'date': k
-        #     }
-        #     __tmp.update(buff[k])
-        #     __data.append(__tmp)
-        #     del __tmp
-        # return __data
-        # return __fake_data
 
     fake_data = __build_fake_data(start_time_ts, end_time_ts)
 
@@ -624,14 +604,39 @@ def query_user_usage(request):
             raise ParseError('connection to rgw server is timeout!')
         except ServerDown:
             raise ParseError('The backing server is not available.')
-        data = rgw.get_usage(
-            uid=u.keys.ceph_uid,
-            start=time.strftime(fmt, time.localtime(start_time_ts)),
-            end=time.strftime(fmt, time.localtime(end_time_ts)),
-            show_summary=False,
-            show_entries=True
-        )
-        __update_fake_date(fake_data, data)
+
+        s_date = time.strftime(fmt, time.localtime(start_time_ts))
+        e_date = time.strftime(fmt, time.localtime(end_time_ts))
+
+        if s_date[5:7] == e_date[5:7]:
+            # 未跨月
+            data = rgw.get_usage(
+                uid=u.keys.ceph_uid,
+                start=s_date+'T00:00:00',
+                end=e_date+'T23:59:59',
+                show_summary=False,
+                show_entries=True
+            )
+            __update_fake_date(fake_data, data)
+        else:
+            # 跨月
+            data = rgw.get_usage(
+                uid=u.keys.ceph_uid,
+                start=s_date+'T00:00:00',
+                end=s_date[:8] + '31T59:59:59',
+                show_summary=False,
+                show_entries=True
+            )
+            __update_fake_date(fake_data, data)
+
+            data = rgw.get_usage(
+                uid=u.keys.ceph_uid,
+                start=e_date[:8] + '01T00:00:00',
+                end=e_date+'T23:59:59',
+                show_summary=False,
+                show_entries=True
+            )
+            __update_fake_date(fake_data, data)
 
     for k, v in fake_data.items():
         usage_data.append({
