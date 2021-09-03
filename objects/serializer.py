@@ -8,7 +8,7 @@ import base64
 class ObjectsSerialize(ModelSerializer):
     owner = SimpleUserSerialize(read_only=True)
     bucket = SimpleBucketSerialize(read_only=True)
-    type = SerializerMethodField()
+    # type = SerializerMethodField()
     cn_type = SerializerMethodField()
     key_url = SerializerMethodField()
     # root_url = SerializerMethodField()
@@ -16,8 +16,8 @@ class ObjectsSerialize(ModelSerializer):
     root = SerializerMethodField()
 
 
-    def get_type(self, obj):
-        return 'File' if obj.type == 'f' else 'Directory'
+    # def get_type(self, obj):
+    #     return 'File' if obj.type == 'f' else 'Directory'
 
     def get_root(self, obj):
         return obj.root if obj.root else '/'
@@ -48,5 +48,5 @@ class ObjectsSerialize(ModelSerializer):
             'name', 'bucket', 'obj_id', 'type',
             'root', 'file_size', 'md5', 'etag', 'owner',
             'upload_time', "cn_type", 'key_url',
-            'permission', 'cn_permission', 'type'
+            'permission', 'cn_permission'
         )
