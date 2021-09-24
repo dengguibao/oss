@@ -13,22 +13,21 @@ class RequestLogMiddleware(MiddlewareMixin):
         self.logger = settings.LOGGER
 
     def __call__(self, request):
+        response = self.get_response(request)
+
+        if request.method not in ('POST', 'PUT', 'DELETE'):
+            return response
+
         try:
             if request.content_type == 'multipart/form-data':
                 body = request.POST.dict()
                 file = request.FILES.get('file', None)
+                print(file)
                 body['file'] = str(file)
             else:
                 body = json.loads(request.body)
         except json.decoder.JSONDecodeError:
             body = dict()
-
-        # if request.method == 'GET':
-        #     body.update(dict(request.GET))
-        # else:
-        #     body.update(dict(request.POST))
-        response = self.get_response(request)
-
         body = self.filter_secure_data(body, ('password', 'pwd1', 'pwd2', 'old_pwd'))
 
         query_string = request.META['QUERY_STRING']

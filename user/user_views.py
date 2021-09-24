@@ -580,9 +580,10 @@ def query_user_usage(request):
         # buff = {}
         for bucket in origin_data['entries'][0]['buckets']:
             act_time = bucket['time'][:10]
-            # print(bucket)
+            print(act_time)
+            print(bucket)
             for cate in bucket['categories']:
-                # print(cate)
+                print(cate)
                 if 'category' in cate and cate['category'] == 'put_obj':
                     __fake_data[act_time]['put_obj']['successful_ops'] += cate['successful_ops']
                     __fake_data[act_time]['put_obj']['bytes_received'] += cate['bytes_received']
@@ -612,8 +613,8 @@ def query_user_usage(request):
             # 未跨月
             data = rgw.get_usage(
                 uid=u.keys.ceph_uid,
-                start=s_date+'T00:00:00',
-                end=e_date+'T23:59:59',
+                start=s_date,
+                end=e_date,
                 show_summary=False,
                 show_entries=True
             )
@@ -622,8 +623,8 @@ def query_user_usage(request):
             # 跨月
             data = rgw.get_usage(
                 uid=u.keys.ceph_uid,
-                start=s_date+'T00:00:00',
-                end=s_date[:8] + '31T59:59:59',
+                start=s_date,
+                end=s_date[:8] + '31',
                 show_summary=False,
                 show_entries=True
             )
@@ -631,8 +632,8 @@ def query_user_usage(request):
 
             data = rgw.get_usage(
                 uid=u.keys.ceph_uid,
-                start=e_date[:8] + '01T00:00:00',
-                end=e_date+'T23:59:59',
+                start=e_date[:8] + '01',
+                end=e_date,
                 show_summary=False,
                 show_entries=True
             )
